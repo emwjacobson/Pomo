@@ -1,0 +1,15 @@
+menu "Initial Configuration Settings"
+
+    config WIFI_CONFIG_SSID
+        string "Config wifi SSID"
+        default "Pomo Config"
+        help
+            SSID made for initial configuration
+
+    config WIFI_CONFIG_PASSWORD
+        string "Config wifi password"
+        default "pomoconfig"
+        help
+            Password for initial configuration wifi
+
+endmenu
