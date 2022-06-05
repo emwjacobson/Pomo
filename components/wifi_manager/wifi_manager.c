@@ -26,6 +26,10 @@ esp_err_t wifi_init(void) {
     return ESP_OK;
 }
 
+bool wifi_is_configured(void) {
+    return false;
+}
+
 esp_err_t wifi_start_ap(void) {
     esp_netif_create_default_wifi_ap();
 
@@ -37,8 +41,6 @@ esp_err_t wifi_start_ap(void) {
         ESP_LOGE(TAG, "Error executing `esp_wifi_init`. Error: %s", esp_err_to_name(err));
         return err;
     }
-
-    // err = esp_event_handler_instance_register(WIFI_EVENT, ESP_EVENT_ANY_ID, &wifi_event_handler, NULL, NULL);
 
     wifi_config_t wifi_config = {
         .ap = {
@@ -74,4 +76,8 @@ esp_err_t wifi_start_ap(void) {
 
     ESP_LOGI(TAG, "Finished setting up wifi.");
     return ESP_OK;
+}
+
+esp_err_t wifi_start_station(void) {
+    return ESP_ERR_NOT_FINISHED;
 }
