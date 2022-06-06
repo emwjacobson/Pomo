@@ -48,6 +48,8 @@ void app_main(void) {
             ESP_LOGE(TAG, "Error starting Wi-Fi access point. Error: %s", esp_err_to_name(err));
             exit(1);
         }
+
+        wifi_start_config_server();
     }
 
 }

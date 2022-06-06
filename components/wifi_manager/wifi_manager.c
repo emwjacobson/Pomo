@@ -3,6 +3,8 @@
 #include <esp_wifi.h>
 #include <esp_err.h>
 #include <esp_log.h>
+#include <esp_http_server.h>
+#include <mdns.h>
 
 #include "wifi_manager.h"
 
@@ -13,13 +15,25 @@ esp_err_t wifi_init(void) {
     
     err = esp_netif_init();
     if (err != ESP_OK) {
-        ESP_LOGW(TAG, "Error executing `esp_netif_init`. Error: %s", esp_err_to_name(err));
+        ESP_LOGE(TAG, "Error executing `esp_netif_init`. Error: %s", esp_err_to_name(err));
         return err;
     }
 
     err = esp_event_loop_create_default();
     if (err != ESP_OK) {
-        ESP_LOGW(TAG, "Error executing `esp_event_loop_create_default`. Error: %s", esp_err_to_name(err));
+        ESP_LOGE(TAG, "Error executing `esp_event_loop_create_default`. Error: %s", esp_err_to_name(err));
+        return err;
+    }
+
+    err = mdns_init();
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "Error executing `mdns_init`. Error: %s", esp_err_to_name(err));
+        return err;
+    }
+
+    err = mdns_hostname_set("pomo");
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "Error setting mdns hostname. Error %s", esp_err_to_name(err));
         return err;
     }
 
@@ -80,4 +94,34 @@ esp_err_t wifi_start_ap(void) {
 
 esp_err_t wifi_start_station(void) {
     return ESP_ERR_NOT_FINISHED;
+}
+
+static esp_err_t config_get_handler(httpd_req_t* req) {
+    httpd_resp_send(req, "Hello World!", HTTPD_RESP_USE_STRLEN);
+
+    return ESP_OK;
+}
+
+static const httpd_uri_t config_index = {
+    .uri = "/",
+    .method = HTTP_GET,
+    .handler = config_get_handler,
+    .user_ctx = NULL
+};
+
+esp_err_t wifi_start_config_server(void) {
+    httpd_handle_t server = NULL;
+    httpd_config_t config = HTTPD_DEFAULT_CONFIG();
+    // config.lru_purge_enable = true; TODO: Decide if this stays
+
+    esp_err_t err;
+    err = httpd_start(&server, &config);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "Error starting httpd server. Error: %s", esp_err_to_name(err));
+        return err;
+    }
+
+    httpd_register_uri_handler(server, &config_index);
+
+    return ESP_OK;
 }
