@@ -7,10 +7,28 @@
 #include <FreeRTOSConfig.h>
 #include <freertos/task.h>
 #include <sdkconfig.h>
+#include <esp_spiffs.h>
 
 #include "wifi_manager.h"
 
 static const char *TAG = "Main";
+
+esp_err_t init_fs() {
+    esp_vfs_spiffs_conf_t conf = {
+        .base_path = CONFIG_SETUP_FS_BASE,
+        .partition_label = NULL,
+        .max_files = 5,
+        .format_if_mount_failed = false
+    };
+
+    esp_err_t err = esp_vfs_spiffs_register(&conf);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "Error registering SPIFFS. Error: %s", esp_err_to_name(err));
+        return err;
+    }
+
+    return ESP_OK;
+}
 
 void app_main(void) {
     esp_err_t err;
@@ -18,6 +36,12 @@ void app_main(void) {
     err = nvs_flash_init();
     if (err != ESP_OK) {
         ESP_LOGE(TAG, "Error initializing NVS flash. Error: %s", esp_err_to_name(err));
+        exit(1);
+    }
+
+    err = init_fs();
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "Error initializing filesystem. Error: %s", esp_err_to_name(err));
         exit(1);
     }
 

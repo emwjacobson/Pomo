@@ -12,4 +12,8 @@ menu "Initial Configuration Settings"
         help
             Password for initial configuration wifi
 
+    config SETUP_FS_BASE
+        string "Base directory for SPIFFS filesystem"
+        default "/www"
+
 endmenu

@@ -293,6 +293,7 @@ CONFIG_PARTITION_TABLE_MD5=y
 #
 CONFIG_WIFI_CONFIG_SSID="Pomo Config"
 CONFIG_WIFI_CONFIG_PASSWORD="pomoconfig"
+CONFIG_SETUP_FS_BASE="/www"
 # end of Initial Configuration Settings
 
 #
