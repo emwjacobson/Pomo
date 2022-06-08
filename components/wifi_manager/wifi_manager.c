@@ -8,13 +8,16 @@
 #include <mdns.h>
 #include <esp_vfs.h>
 #include <sdkconfig.h>
+#include <cJSON.h>
 
 #include "wifi_manager.h"
 
 #define PATH_MAX_LENGTH ESP_VFS_PATH_MAX+128
 #define SCRATCH_BUFSIZE (10240)
+#define DEFAULT_SCAN_LIST_SIZE 16
 
 static const char *TAG = "Wifi Manager";
+static httpd_handle_t server;
 
 esp_err_t wifi_init(void) {
     esp_err_t err;
@@ -43,6 +46,34 @@ esp_err_t wifi_init(void) {
         return err;
     }
 
+    esp_netif_create_default_wifi_ap();
+    esp_netif_create_default_wifi_sta();
+
+    wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
+
+    err = esp_wifi_init(&cfg);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "Error executing `esp_wifi_init`. Error: %s", esp_err_to_name(err));
+        return err;
+    }
+
+    err = esp_wifi_set_mode(WIFI_MODE_APSTA);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "Error running `esp_wifi_set_mode`. Error: %s", esp_err_to_name(err));
+        return err;
+    }
+
+    server = NULL;
+    httpd_config_t config = HTTPD_DEFAULT_CONFIG();
+    config.uri_match_fn = httpd_uri_match_wildcard;
+    config.lru_purge_enable = true;
+    
+    err = httpd_start(&server, &config);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "Error starting httpd server. Error: %s", esp_err_to_name(err));
+        return err;
+    }
+
     return ESP_OK;
 }
 
@@ -51,17 +82,6 @@ bool wifi_is_configured(void) {
 }
 
 esp_err_t wifi_start_ap(void) {
-    esp_netif_create_default_wifi_ap();
-
-    wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
-
-    esp_err_t err;
-    err = esp_wifi_init(&cfg);
-    if (err != ESP_OK) {
-        ESP_LOGE(TAG, "Error executing `esp_wifi_init`. Error: %s", esp_err_to_name(err));
-        return err;
-    }
-
     wifi_config_t wifi_config = {
         .ap = {
             .ssid = CONFIG_WIFI_CONFIG_SSID,
@@ -76,11 +96,7 @@ esp_err_t wifi_start_ap(void) {
         }
     };
 
-    err = esp_wifi_set_mode(WIFI_MODE_AP);
-    if (err != ESP_OK) {
-        ESP_LOGE(TAG, "Error running `esp_wifi_set_mode`. Error: %s", esp_err_to_name(err));
-        return err;
-    }
+    esp_err_t err;
 
     err = esp_wifi_set_config(WIFI_IF_AP, &wifi_config);
     if (err != ESP_OK) {
@@ -98,8 +114,48 @@ esp_err_t wifi_start_ap(void) {
     return ESP_OK;
 }
 
-esp_err_t wifi_start_station(void) {
+esp_err_t wifi_start_sta(void) {
     return ESP_ERR_NOT_FINISHED;
+}
+
+static esp_err_t api_get_ssids_handler(httpd_req_t* req) {
+    esp_err_t err;
+
+    uint16_t number = DEFAULT_SCAN_LIST_SIZE;
+    wifi_ap_record_t ap_info[DEFAULT_SCAN_LIST_SIZE];
+    uint16_t ap_count = 0;
+    memset(ap_info, 0, sizeof(ap_info));
+
+    err = esp_wifi_scan_start(NULL, true);
+    if (err != ESP_OK) {
+        ESP_LOGW(TAG, "Error executing `esp_wifi_scan_start`. Error %s", esp_err_to_name(err));
+        return err;
+    }
+
+    err = esp_wifi_scan_get_ap_records(&number, ap_info);
+    if (err != ESP_OK) {
+        ESP_LOGW(TAG, "Error executing `esp_wifi_scan_get_ap_records`. Error %s", esp_err_to_name(err));
+        return err;
+    }
+
+    err = esp_wifi_scan_get_ap_num(&ap_count);
+    if (err != ESP_OK) {
+        ESP_LOGW(TAG, "Error executing `esp_wifi_scan_get_ap_num`. Error %s", esp_err_to_name(err));
+        return err;
+    }
+
+    ESP_LOGI(TAG, "Total APs scanned = %u", ap_count);
+
+    cJSON* json = cJSON_CreateObject();
+    cJSON* ssid_arr = cJSON_AddArrayToObject(json, "ssids");
+    for (int i = 0; (i < DEFAULT_SCAN_LIST_SIZE) && (i < ap_count); i++) {
+        ESP_LOGI(TAG, "SSID \t\t%s", ap_info[i].ssid);
+        cJSON* ap = cJSON_CreateString((char*)(ap_info[i].ssid));
+        cJSON_AddItemToArray(ssid_arr, ap);
+    }
+    httpd_resp_send(req, cJSON_Print(json), HTTPD_RESP_USE_STRLEN);
+    cJSON_Delete(json);
+    return ESP_OK;
 }
 
 esp_err_t send_page(httpd_req_t* req, int fd, char* filepath, int status) {
@@ -171,7 +227,14 @@ static esp_err_t config_get_handler(httpd_req_t* req) {
     return ESP_OK;
 }
 
-static const httpd_uri_t config_index = {
+static const httpd_uri_t api_get_ssids_config = {
+    .uri = "/api/get_ssids",
+    .method = HTTP_GET,
+    .handler = api_get_ssids_handler,
+    .user_ctx = NULL
+};
+
+static const httpd_uri_t config_get_config = {
     .uri = "/*",
     .method = HTTP_GET,
     .handler = config_get_handler,
@@ -179,19 +242,13 @@ static const httpd_uri_t config_index = {
 };
 
 esp_err_t wifi_start_config_server(void) {
-    httpd_handle_t server = NULL;
-    httpd_config_t config = HTTPD_DEFAULT_CONFIG();
-    config.uri_match_fn = httpd_uri_match_wildcard;
-    config.lru_purge_enable = true;
-
-    esp_err_t err;
-    err = httpd_start(&server, &config);
-    if (err != ESP_OK) {
-        ESP_LOGE(TAG, "Error starting httpd server. Error: %s", esp_err_to_name(err));
-        return err;
+    if (server == NULL) {
+        ESP_LOGW(TAG, "`wifi_start_config_server` called before HTTP server setup!");
+        return ESP_FAIL;
     }
-
-    httpd_register_uri_handler(server, &config_index);
+    
+    httpd_register_uri_handler(server, &api_get_ssids_config);
+    httpd_register_uri_handler(server, &config_get_config);
 
     return ESP_OK;
 }
