@@ -17,7 +17,7 @@
 #define DEFAULT_SCAN_LIST_SIZE 16
 
 static const char *TAG = "Wifi Manager";
-static httpd_handle_t server;
+static httpd_handle_t server = NULL;
 
 esp_err_t wifi_init(void) {
     esp_err_t err;
@@ -63,10 +63,16 @@ esp_err_t wifi_init(void) {
         return err;
     }
 
-    server = NULL;
+    err = esp_wifi_start();
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "Error running `esp_wifi_start`. Error: %s", esp_err_to_name(err));
+        return err;
+    }
+
+    // server = NULL;
     httpd_config_t config = HTTPD_DEFAULT_CONFIG();
     config.uri_match_fn = httpd_uri_match_wildcard;
-    config.lru_purge_enable = true;
+    // config.lru_purge_enable = true;
     
     err = httpd_start(&server, &config);
     if (err != ESP_OK) {
@@ -104,17 +110,32 @@ esp_err_t wifi_start_ap(void) {
         return err;
     }
 
-    err = esp_wifi_start();
-    if (err != ESP_OK) {
-        ESP_LOGE(TAG, "Error running `esp_wifi_start`. Error: %s", esp_err_to_name(err));
-        return err;
-    }
-
     ESP_LOGI(TAG, "Finished setting up wifi.");
     return ESP_OK;
 }
 
-esp_err_t wifi_start_sta(void) {
+esp_err_t wifi_connect_to_ap(const char ssid[32], const char password[32]) {
+    esp_err_t err;
+
+    wifi_config_t ap_config = {
+        .sta = {
+            // .ssid = ssid,
+            // .password = password,
+            /* Setting a password implies station will connect to all security modes including WEP/WPA.
+             * However these modes are deprecated and not advisable to be used. Incase your Access point
+             * doesn't support WPA2, these mode can be enabled by commenting below line */
+	     .threshold.authmode = WIFI_AUTH_WPA2_WPA3_PSK,
+        },
+    };
+    strncpy((char*)ap_config.sta.ssid, ssid, 32);
+    strncpy((char*)ap_config.sta.password, password, 32);
+
+    err = esp_wifi_set_config(WIFI_IF_STA, &ap_config);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "Error running `esp_wifi_set_config`. Error: %s", esp_err_to_name(err));
+        return err;
+    }
+
     return ESP_ERR_NOT_FINISHED;
 }
 
@@ -154,10 +175,11 @@ static esp_err_t api_get_ssids_handler(httpd_req_t* req) {
         cJSON_AddItemToArray(ssid_arr, ap);
     }
 
+    ESP_LOGI(TAG, "APs converted to cJSON object");
     httpd_resp_set_type(req, "application/json");
     httpd_resp_send(req, cJSON_PrintUnformatted(json), HTTPD_RESP_USE_STRLEN);
-
     cJSON_Delete(json);
+    ESP_LOGI(TAG, "API Request complete");
     return ESP_OK;
 }
 
