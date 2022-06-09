@@ -153,7 +153,10 @@ static esp_err_t api_get_ssids_handler(httpd_req_t* req) {
         cJSON* ap = cJSON_CreateString((char*)(ap_info[i].ssid));
         cJSON_AddItemToArray(ssid_arr, ap);
     }
-    httpd_resp_send(req, cJSON_Print(json), HTTPD_RESP_USE_STRLEN);
+
+    httpd_resp_set_type(req, "application/json");
+    httpd_resp_send(req, cJSON_PrintUnformatted(json), HTTPD_RESP_USE_STRLEN);
+
     cJSON_Delete(json);
     return ESP_OK;
 }

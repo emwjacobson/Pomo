@@ -1,14 +1,18 @@
 <html>
     <head>
-        <title>Hello World!</title>
+        <title>Pomo Configuration</title>
         <link rel="stylesheet" href="styles.css">
     </head>
     <body>
         <div class="config">
-            <form action="">
+            <form onclick="return false">
+                <div class="form-item">
+                    <button class="button-submit" onclick="scan_ssids()" id="scan-button">Scan SSIDs</button>
+                </div>
+
                 <div class="form-item">
                     <label for="ssid">SSID</label>
-                    <input type="text" name="ssid" id="ssid">
+                    <select name="ssid" id="ssid"></select>
                 </div>
 
                 <div class="form-item">
@@ -21,5 +25,42 @@
                 </div>
             </form>
         </div>
+
+    <script>
+        function scan_ssids() {
+            let http = new XMLHttpRequest();
+            let url = '/api/get_ssids';
+
+            let button = document.getElementById('scan-button');
+            button.innerHTML = "Scanning...";
+
+            http.open("GET", url);
+            http.send();
+            http.onreadystatechange = function() {
+                if (this.readyState == 4) {
+                    if (http.status == 200) {
+                        let data = JSON.parse(http.responseText);
+                        console.log(data);
+
+                        let dropdown = document.getElementById('ssid');
+                        dropdown.length = 0;
+
+                        let option;
+                        for (let i = 0; i < data['ssids'].length; i++) {
+                            option = document.createElement('option');
+                            option.text = data['ssids'][i];
+                            option.value = data['ssids'][i];
+                            dropdown.add(option);
+                        }
+
+                        button.innerHTML = "Scan SSIDs";
+                    } else {
+                        button.innerHTML = "Error, please try again!";
+                    }
+                }
+            }
+        }
+    </script>
+
     </body>
 </html>

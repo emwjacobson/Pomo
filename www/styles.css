@@ -38,7 +38,7 @@ body {
     width: 100%;
 }
 
-.form-item > input[type=text], input[type=password] {
+.form-item > input[type=text], input[type=password], select {
     padding: 12px;
     margin-bottom: 20px;
     border: 1px solid lightgray;
