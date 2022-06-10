@@ -119,12 +119,9 @@ esp_err_t wifi_connect_to_ap(const char ssid[32], const char password[32]) {
 
     wifi_config_t ap_config = {
         .sta = {
-            // .ssid = ssid,
-            // .password = password,
-            /* Setting a password implies station will connect to all security modes including WEP/WPA.
-             * However these modes are deprecated and not advisable to be used. Incase your Access point
-             * doesn't support WPA2, these mode can be enabled by commenting below line */
-	     .threshold.authmode = WIFI_AUTH_WPA2_WPA3_PSK,
+            .threshold = {
+                // .authmode = WIFI_AUTH_WPA2_WPA3_PSK
+            },
         },
     };
     strncpy((char*)ap_config.sta.ssid, ssid, 32);
@@ -136,7 +133,15 @@ esp_err_t wifi_connect_to_ap(const char ssid[32], const char password[32]) {
         return err;
     }
 
-    return ESP_ERR_NOT_FINISHED;
+    ESP_LOGI(TAG, "Attempting to connect to SSID: %s Password: %s", ap_config.sta.ssid, ap_config.sta.password);
+
+    err = esp_wifi_connect();
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "Error running `esp_wifi_connect`. Error: %s", esp_err_to_name(err));
+        return err;
+    }
+
+    return ESP_OK;
 }
 
 static esp_err_t api_get_ssids_handler(httpd_req_t* req) {
@@ -180,6 +185,82 @@ static esp_err_t api_get_ssids_handler(httpd_req_t* req) {
     httpd_resp_send(req, cJSON_PrintUnformatted(json), HTTPD_RESP_USE_STRLEN);
     cJSON_Delete(json);
     ESP_LOGI(TAG, "API Request complete");
+    return ESP_OK;
+}
+
+static esp_err_t api_post_connect_to_ap(httpd_req_t* req) {
+    ESP_LOGI(TAG, "Got request to /connect endpoint");
+
+    char* content = calloc(req->content_len + 1, sizeof(char));
+    
+    // NOTE: `httpd_req_recv` does not add zero-termination
+    int ret = httpd_req_recv(req, content, req->content_len);
+    if (ret <= 0) {
+        ESP_LOGW(TAG, "Error getting HTTP request content. Content length: %i", req->content_len);
+        free(content);
+        httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, NULL);
+        return ESP_FAIL;
+    }
+
+    // httpd_req_recv DOES NOT add zero-termination, so we need to do it.
+    // Technically calloc should zero the memory so any bytes not written
+    // should still be 0s, but I'm still doing it...
+    content[ret] = 0x00;
+
+    ESP_LOGD(TAG, "Connect endpoint content: %s", content);
+
+    cJSON* json = cJSON_Parse(content);
+    if (json == NULL) {
+        const char* err_ptr = cJSON_GetErrorPtr();
+        if (err_ptr != NULL) {
+            ESP_LOGW(TAG, "Error parsing JSON. Error before: %s", err_ptr);
+            free(content);
+            httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, NULL);
+            return ESP_FAIL;
+        }
+    }
+
+    free(content);
+
+    // If the json is correctly formatted, it should be in the following form:
+    /*
+        {
+            "ssid": "TheSSIDHere",
+            "password": "ThePasswordHere"
+        }
+    */
+
+    char ssid[32];
+    char password[32];
+
+    cJSON* ssid_json = cJSON_GetObjectItem(json, "ssid");
+    if (!cJSON_IsString(ssid_json) || ssid_json->valuestring == NULL) {
+        ESP_LOGW(TAG, "Error getting SSID from JSON");
+        cJSON_Delete(json);
+        httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, NULL);
+        return ESP_FAIL;
+    }
+    snprintf(ssid, 32, ssid_json->valuestring);
+
+    cJSON* password_json = cJSON_GetObjectItem(json, "password");
+    if (!cJSON_IsString(password_json) || password_json->valuestring == NULL) {
+        ESP_LOGW(TAG, "Error getting password from JSON");
+        cJSON_Delete(json);
+        httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, NULL);
+        return ESP_FAIL;
+    }
+    snprintf(password, 32, password_json->valuestring);
+
+    cJSON_Delete(json);
+
+    esp_err_t err = wifi_connect_to_ap(ssid, password);
+    if (err != ESP_OK) {
+        ESP_LOGW(TAG, "Error connecting to wifi.");
+        httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, NULL);
+        return ESP_FAIL;
+    }
+
+    httpd_resp_send(req, "OK", HTTPD_RESP_USE_STRLEN);
     return ESP_OK;
 }
 
@@ -259,6 +340,13 @@ static const httpd_uri_t api_get_ssids_config = {
     .user_ctx = NULL
 };
 
+static const httpd_uri_t api_connect_config = {
+    .uri = "/api/connect",
+    .method = HTTP_POST,
+    .handler = api_post_connect_to_ap,
+    .user_ctx = NULL
+};
+
 static const httpd_uri_t config_get_config = {
     .uri = "/*",
     .method = HTTP_GET,
@@ -273,6 +361,7 @@ esp_err_t wifi_start_config_server(void) {
     }
     
     httpd_register_uri_handler(server, &api_get_ssids_config);
+    httpd_register_uri_handler(server, &api_connect_config);
     httpd_register_uri_handler(server, &config_get_config);
 
     return ESP_OK;
