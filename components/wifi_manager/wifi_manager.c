@@ -3,6 +3,7 @@
 #include <fcntl.h>
 #include <esp_wifi.h>
 #include <esp_err.h>
+#include <esp_system.h>
 #include <esp_log.h>
 #include <esp_http_server.h>
 #include <mdns.h>
@@ -10,6 +11,7 @@
 #include <sdkconfig.h>
 #include <cJSON.h>
 
+#include "esp_http_client.h"
 #include "wifi_manager.h"
 
 #define PATH_MAX_LENGTH ESP_VFS_PATH_MAX+128
@@ -118,6 +120,8 @@ esp_err_t wifi_start_ap(void) {
 
 esp_err_t wifi_connect_to_ap(const char ssid[32], const char password[32]) {
     esp_err_t err;
+
+    esp_wifi_disconnect();
 
     wifi_config_t ap_config = {
         .sta = {
@@ -269,8 +273,24 @@ static esp_err_t api_post_connect_to_ap(httpd_req_t* req) {
 static esp_err_t api_get_check_connection(httpd_req_t* req) {
     ESP_LOGI(TAG, "Got request to check connection endpoint");
 
-    httpd_resp_send_err(req, HTTPD_501_METHOD_NOT_IMPLEMENTED, NULL);
-    return ESP_ERR_NOT_FINISHED;
+    esp_http_client_config_t config = {
+        .host = "httpbin.org",
+        .path = "/get",
+        .transport_type = HTTP_TRANSPORT_OVER_TCP,
+        // .event_handler = _http_event_handler,
+    };
+    esp_http_client_handle_t client = esp_http_client_init(&config);
+    esp_err_t err = esp_http_client_perform(client);
+    if (err == ESP_OK) {
+        ESP_LOGI(TAG, "HTTP GET Status = %d, content_length = %lld",
+                esp_http_client_get_status_code(client),
+                esp_http_client_get_content_length(client));
+    } else {
+        ESP_LOGE(TAG, "HTTP GET request failed: %s", esp_err_to_name(err));
+    }
+
+    httpd_resp_send(req, "OK", strlen("OK"));
+    return ESP_OK;
 }
 
 esp_err_t send_page(httpd_req_t* req, int fd, char* filepath, int status) {
@@ -342,39 +362,39 @@ static esp_err_t config_get_handler(httpd_req_t* req) {
     return ESP_OK;
 }
 
-static const httpd_uri_t api_get_ssids_config = {
-    .uri = "/api/get_ssids",
-    .method = HTTP_GET,
-    .handler = api_get_ssids_handler,
-    .user_ctx = NULL
-};
-
-static const httpd_uri_t api_connect_config = {
-    .uri = "/api/connect",
-    .method = HTTP_POST,
-    .handler = api_post_connect_to_ap,
-    .user_ctx = NULL
-};
-
-static const httpd_uri_t api_check_connection_config = {
-    .uri = "/api/check_connection",
-    .method = HTTP_GET,
-    .handler = api_get_check_connection,
-    .user_ctx = NULL
-};
-
-static const httpd_uri_t config_get_config = {
-    .uri = "/*",
-    .method = HTTP_GET,
-    .handler = config_get_handler,
-    .user_ctx = NULL
-};
-
 esp_err_t wifi_start_config_server(void) {
     if (server == NULL) {
         ESP_LOGW(TAG, "`wifi_start_config_server` called before HTTP server setup!");
         return ESP_FAIL;
     }
+
+    static const httpd_uri_t api_get_ssids_config = {
+        .uri = "/api/get_ssids",
+        .method = HTTP_GET,
+        .handler = api_get_ssids_handler,
+        .user_ctx = NULL
+    };
+
+    static const httpd_uri_t api_connect_config = {
+        .uri = "/api/connect",
+        .method = HTTP_POST,
+        .handler = api_post_connect_to_ap,
+        .user_ctx = NULL
+    };
+
+    static const httpd_uri_t api_check_connection_config = {
+        .uri = "/api/check_connection",
+        .method = HTTP_GET,
+        .handler = api_get_check_connection,
+        .user_ctx = NULL
+    };
+
+    static const httpd_uri_t config_get_config = {
+        .uri = "/*",
+        .method = HTTP_GET,
+        .handler = config_get_handler,
+        .user_ctx = NULL
+    };
     
     httpd_register_uri_handler(server, &api_get_ssids_config);
     httpd_register_uri_handler(server, &api_connect_config);
