@@ -14,7 +14,7 @@
 
 #define PATH_MAX_LENGTH ESP_VFS_PATH_MAX+128
 #define SCRATCH_BUFSIZE (10240)
-#define DEFAULT_SCAN_LIST_SIZE 16
+#define DEFAULT_SCAN_LIST_SIZE 24
 
 static const char *TAG = "Wifi Manager";
 static httpd_handle_t server = NULL;
@@ -71,6 +71,8 @@ esp_err_t wifi_init(void) {
 
     // server = NULL;
     httpd_config_t config = HTTPD_DEFAULT_CONFIG();
+    config.recv_wait_timeout = 10;
+    config.send_wait_timeout = 10;
     config.uri_match_fn = httpd_uri_match_wildcard;
     // config.lru_purge_enable = true;
     
@@ -98,7 +100,7 @@ esp_err_t wifi_start_ap(void) {
                 .authmode = WIFI_AUTH_WPA_WPA2_PSK,
             .pmf_cfg = {
                 .required = false
-            }
+            },
         }
     };
 
@@ -264,6 +266,13 @@ static esp_err_t api_post_connect_to_ap(httpd_req_t* req) {
     return ESP_OK;
 }
 
+static esp_err_t api_get_check_connection(httpd_req_t* req) {
+    ESP_LOGI(TAG, "Got request to check connection endpoint");
+
+    httpd_resp_send_err(req, HTTPD_501_METHOD_NOT_IMPLEMENTED, NULL);
+    return ESP_ERR_NOT_FINISHED;
+}
+
 esp_err_t send_page(httpd_req_t* req, int fd, char* filepath, int status) {
     httpd_resp_set_type(req, "text/html");
 
@@ -347,6 +356,13 @@ static const httpd_uri_t api_connect_config = {
     .user_ctx = NULL
 };
 
+static const httpd_uri_t api_check_connection_config = {
+    .uri = "/api/check_connection",
+    .method = HTTP_GET,
+    .handler = api_get_check_connection,
+    .user_ctx = NULL
+};
+
 static const httpd_uri_t config_get_config = {
     .uri = "/*",
     .method = HTTP_GET,
@@ -362,6 +378,7 @@ esp_err_t wifi_start_config_server(void) {
     
     httpd_register_uri_handler(server, &api_get_ssids_config);
     httpd_register_uri_handler(server, &api_connect_config);
+    httpd_register_uri_handler(server, &api_check_connection_config);
     httpd_register_uri_handler(server, &config_get_config);
 
     return ESP_OK;

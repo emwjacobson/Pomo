@@ -16,12 +16,13 @@
                 </div>
 
                 <div class="form-item">
-                    <label for="password">Password</label>
-                    <input type="password" name="Password" id="password">
+                        <label for="password">Password</label>
+                        <input type="password" name="Password" id="password">
                 </div>
 
-                <div class="form-item">
-                    <button type="submit" class="button-submit">Save Credentials</button>
+                <div class="form-item-h">
+                    <button type="submit" class="button-submit" onclick="connect()">Save Credentials</button>
+                    <button type="submit" class="button-submit" onclick="check_connection()">Check Connection</button>
                 </div>
             </form>
         </div>
@@ -34,7 +35,7 @@
             let button = document.getElementById('scan-button');
             button.innerHTML = "Scanning...";
 
-            http.open("GET", url);
+            http.open('GET', url);
             http.send();
             http.onreadystatechange = function() {
                 if (this.readyState == 4) {
@@ -59,6 +60,29 @@
                     }
                 }
             }
+        }
+
+        function connect() {
+            let ssid = document.getElementById('ssid');
+            let password = document.getElementById('password');
+
+            console.log(ssid.value);
+            console.log(password.value);
+
+            let http = new XMLHttpRequest();
+            let url = '/api/connect';
+            http.open("POST", url);
+            http.send(JSON.stringify({ssid: ssid.value, password: password.value}));
+
+            http.onreadystatechange = function() {
+                if (this.readyState == 4) {
+                    console.log(http.status, http.responseText);
+                }
+            }
+        }
+
+        function check_connection() {
+            console.log("Not Implemented!");
         }
     </script>
 
