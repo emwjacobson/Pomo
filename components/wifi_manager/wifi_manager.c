@@ -4,22 +4,28 @@
 #include <esp_wifi.h>
 #include <esp_err.h>
 #include <esp_system.h>
+#include <esp_netif.h>
 #include <esp_log.h>
+#include <esp_ping.h>
+#include <ping/ping_sock.h>
 #include <esp_http_server.h>
 #include <mdns.h>
 #include <esp_vfs.h>
 #include <sdkconfig.h>
 #include <cJSON.h>
 
-#include "esp_http_client.h"
+#include <esp_http_client.h>
 #include "wifi_manager.h"
 
 #define PATH_MAX_LENGTH ESP_VFS_PATH_MAX+128
 #define SCRATCH_BUFSIZE (10240)
 #define DEFAULT_SCAN_LIST_SIZE 24
+#define PING_WAIT_DELAY_MS 250
 
 static const char *TAG = "Wifi Manager";
 static httpd_handle_t server = NULL;
+static esp_netif_t* cfg_netif_ap;
+static esp_netif_t* cfg_netif_sta;
 
 esp_err_t wifi_init(void) {
     esp_err_t err;
@@ -48,8 +54,8 @@ esp_err_t wifi_init(void) {
         return err;
     }
 
-    esp_netif_create_default_wifi_ap();
-    esp_netif_create_default_wifi_sta();
+    cfg_netif_ap = esp_netif_create_default_wifi_ap();
+    cfg_netif_sta = esp_netif_create_default_wifi_sta();
 
     wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
 
@@ -161,18 +167,21 @@ static esp_err_t api_get_ssids_handler(httpd_req_t* req) {
     err = esp_wifi_scan_start(NULL, true);
     if (err != ESP_OK) {
         ESP_LOGW(TAG, "Error executing `esp_wifi_scan_start`. Error %s", esp_err_to_name(err));
+        httpd_resp_send_500(req);
         return err;
     }
 
     err = esp_wifi_scan_get_ap_records(&number, ap_info);
     if (err != ESP_OK) {
         ESP_LOGW(TAG, "Error executing `esp_wifi_scan_get_ap_records`. Error %s", esp_err_to_name(err));
+        httpd_resp_send_500(req);
         return err;
     }
 
     err = esp_wifi_scan_get_ap_num(&ap_count);
     if (err != ESP_OK) {
         ESP_LOGW(TAG, "Error executing `esp_wifi_scan_get_ap_num`. Error %s", esp_err_to_name(err));
+        httpd_resp_send_500(req);
         return err;
     }
 
@@ -270,26 +279,107 @@ static esp_err_t api_post_connect_to_ap(httpd_req_t* req) {
     return ESP_OK;
 }
 
+static bool ping_finished = false;
+static bool ping_successful = false;
+
+static void test_on_ping_end(esp_ping_handle_t hdl, void *args) {
+    uint32_t transmitted;
+    uint32_t received;
+    uint32_t total_time_ms;
+
+    esp_ping_get_profile(hdl, ESP_PING_PROF_REQUEST, &transmitted, sizeof(transmitted));
+    esp_ping_get_profile(hdl, ESP_PING_PROF_REPLY, &received, sizeof(received));
+    esp_ping_get_profile(hdl, ESP_PING_PROF_DURATION, &total_time_ms, sizeof(total_time_ms));
+    printf("%d packets transmitted, %d received, time %dms\n", transmitted, received, total_time_ms);
+    ping_finished = true;
+    ping_successful = (received > 0);
+
+    // esp_ping_stop(hdl);
+    // if (err != ESP_OK) {
+    //     ESP_LOGE(TAG, "Error executing `esp_ping_stop`. Error: %s", esp_err_to_name(err));
+    //     httpd_resp_send_500(req);
+    //     return err;
+    // }
+    esp_ping_delete_session(hdl);
+    // if (err != ESP_OK) {
+    //     ESP_LOGE(TAG, "Error executing `esp_ping_delete_session`. Error: %s", esp_err_to_name(err));
+    //     httpd_resp_send_500(req);
+    //     return err;
+    // }
+}
+
 static esp_err_t api_get_check_connection(httpd_req_t* req) {
+    esp_err_t err;
+
     ESP_LOGI(TAG, "Got request to check connection endpoint");
 
-    esp_http_client_config_t config = {
-        .host = "httpbin.org",
-        .path = "/get",
-        .transport_type = HTTP_TRANSPORT_OVER_TCP,
-        // .event_handler = _http_event_handler,
-    };
-    esp_http_client_handle_t client = esp_http_client_init(&config);
-    esp_err_t err = esp_http_client_perform(client);
-    if (err == ESP_OK) {
-        ESP_LOGI(TAG, "HTTP GET Status = %d, content_length = %lld",
-                esp_http_client_get_status_code(client),
-                esp_http_client_get_content_length(client));
-    } else {
-        ESP_LOGE(TAG, "HTTP GET request failed: %s", esp_err_to_name(err));
+    esp_netif_ip_info_t ip_info;
+    esp_netif_get_ip_info(cfg_netif_sta, &ip_info);
+
+    ESP_LOGI(TAG, "Got IP info");
+
+    ip_addr_t target_addr;
+    memset(&target_addr, 0, sizeof(target_addr));
+    target_addr.type = IPADDR_TYPE_V4;
+    target_addr.u_addr.ip4.addr = ip_info.gw.addr;
+    
+    static char str[IP4ADDR_STRLEN_MAX];
+    ip4addr_ntoa_r(&target_addr.u_addr.ip4, str, IP4ADDR_STRLEN_MAX);
+    printf("IP ADDRESS: %s\n", str);
+
+    esp_ping_config_t ping_config = ESP_PING_DEFAULT_CONFIG();
+    ping_config.target_addr = target_addr;
+    ping_config.timeout_ms = 500;
+
+    /* set callback functions */
+    esp_ping_callbacks_t cbs;
+    cbs.on_ping_success = NULL;
+    cbs.on_ping_success = NULL;
+    cbs.on_ping_end = test_on_ping_end;
+
+    ping_finished = false;
+    ping_successful = false;
+
+    ESP_LOGI(TAG, "Configured ping client");
+
+    esp_ping_handle_t ping;
+    err = esp_ping_new_session(&ping_config, &cbs, &ping);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "Error executing `esp_ping_new_session`. Error: %s", esp_err_to_name(err));
+        httpd_resp_send_500(req);
+        return err;
+    }
+    err = esp_ping_start(ping);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "Error executing `esp_ping_start`. Error: %s", esp_err_to_name(err));
+        httpd_resp_send_500(req);
+        return err;
     }
 
-    httpd_resp_send(req, "OK", strlen("OK"));
+    ESP_LOGI(TAG, "Started ping");
+
+    int i = 0;
+    while (!ping_finished) {
+        if (i >= (1000/PING_WAIT_DELAY_MS) * 6) {
+            ESP_LOGI(TAG, "Timed out waiting for ping results");
+            esp_ping_stop(ping);
+            esp_ping_delete_session(ping);
+            break;
+        }
+        ESP_LOGI(TAG, "Waiting for ping to finish...");
+        vTaskDelay(pdMS_TO_TICKS(PING_WAIT_DELAY_MS));
+        i++;
+    }
+
+    ESP_LOGI(TAG, "IP check finished");
+
+    cJSON* resp_json = cJSON_CreateObject();
+    cJSON_AddItemToObject(resp_json, "success", cJSON_CreateBool(ping_successful));
+
+    httpd_resp_set_type(req, "application/json");
+    httpd_resp_send(req, cJSON_PrintUnformatted(resp_json), HTTPD_RESP_USE_STRLEN);
+    cJSON_Delete(resp_json);
+    ESP_LOGI(TAG, "Request handling finished");
     return ESP_OK;
 }
 

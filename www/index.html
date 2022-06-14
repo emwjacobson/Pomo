@@ -22,7 +22,7 @@
 
                 <div class="flex h">
                     <button type="submit" class="button-submit" onclick="connect()">Save Credentials</button>
-                    <button type="submit" class="button-submit" onclick="check_connection()">Check Connection</button>
+                    <button type="submit" class="button-submit" onclick="check_connection()" id="check-button">Check Connection</button>
                 </div>
             </form>
         </div>
@@ -82,7 +82,26 @@
         }
 
         function check_connection() {
-            console.log("Not Implemented!");
+            let button = document.getElementById('check-button');
+            button.innerHTML = "Checking...";
+
+            let http = new XMLHttpRequest();
+            let url = '/api/check_connection';
+            http.open("GET", url);
+            http.send();
+
+            http.onreadystatechange = function() {
+                if (this.readyState == 4) {
+                    let data = JSON.parse(http.responseText);
+                    console.log(data);
+
+                    if (data['success']) {
+                        button.innerHTML = "Connection Success!";
+                    } else {
+                        button.innerHTML = "Connection Failed.";
+                    }
+                }
+            }
         }
     </script>
 
