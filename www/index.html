@@ -6,21 +6,21 @@
     <body>
         <div class="config">
             <form onclick="return false">
-                <div class="form-item">
+                <div class="flex v">
                     <button class="button-submit" onclick="scan_ssids()" id="scan-button">Scan SSIDs</button>
                 </div>
 
-                <div class="form-item">
+                <div class="flex v">
                     <label for="ssid">SSID</label>
                     <select name="ssid" id="ssid"></select>
                 </div>
 
-                <div class="form-item">
-                        <label for="password">Password</label>
-                        <input type="password" name="Password" id="password">
+                <div class="flex v">
+                    <label for="password">Password</label>
+                    <input type="password" name="Password" id="password">
                 </div>
 
-                <div class="form-item-h">
+                <div class="flex h">
                     <button type="submit" class="button-submit" onclick="connect()">Save Credentials</button>
                     <button type="submit" class="button-submit" onclick="check_connection()">Check Connection</button>
                 </div>

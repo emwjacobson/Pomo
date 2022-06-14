@@ -26,26 +26,27 @@ body {
     margin: 0px;
 }
 
-.form-item {
+.flex {
     display: flex;
-    flex-direction: column;
-    align-items: center;
-}
-
-.form-item-h {
-    display: flex;
-    flex-direction: row;
-    align-items: center;
     justify-content: center;
+    align-items: center;
 }
 
-.form-item > label {
+.v {
+    flex-direction: column;
+}
+
+.h {
+    flex-direction: row;
+}
+
+label {
     font-size: 24px;
     padding-bottom: 5px;
     width: 100%;
 }
 
-.form-item > input[type=text], input[type=password], select {
+input[type=text], input[type=password], select {
     padding: 12px;
     margin-bottom: 20px;
     border: 1px solid lightgray;
