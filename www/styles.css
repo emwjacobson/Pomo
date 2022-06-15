@@ -49,14 +49,12 @@ label {
 
 input[type=text], input[type=password], select {
     padding: 12px;
-    /* margin-bottom: 20px; */
     border: 1px solid lightgray;
     border-radius: 3px;
     width: 100%;
 }
 
 .button-submit {
-    /* width: 40%; */
     width: 100%;
     border: 1px solid #009FF5;
     padding: 20px;

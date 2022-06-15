@@ -148,6 +148,32 @@ bool wifi_is_configured(void) {
     return true;
 }
 
+void reset_config_runner(void* arg) {
+    esp_err_t err;
+    
+    led_fade_in_ISR(COLOR_RED);
+    led_fade_out_ISR();
+
+    err = nvs_erase_key(storage_handle, "wifi_ssid");
+    if (err != ESP_OK && err != ESP_ERR_NVS_NOT_FOUND) {
+        ESP_LOGE(TAG, "Error erasing `wifi_ssid` key from nvs. Error: %s", esp_err_to_name(err));
+        return;
+    }
+    err = nvs_erase_key(storage_handle, "wifi_password");
+    if (err != ESP_OK && err != ESP_ERR_NVS_NOT_FOUND) {
+        ESP_LOGE(TAG, "Error erasing `wifi_password` key from nvs. Error: %s", esp_err_to_name(err));
+        return;
+    }
+
+    vTaskDelete(NULL);
+}
+
+esp_err_t wifi_reset_config(void) {
+    xTaskCreate(reset_config_runner, "Reset Runner", configMINIMAL_STACK_SIZE + 1024, NULL, tskIDLE_PRIORITY + 5, NULL);
+
+    return ESP_OK;
+}
+
 esp_err_t wifi_start_ap(void) {
     wifi_config_t wifi_config = {
         .ap = {
@@ -462,8 +488,31 @@ static esp_err_t api_get_check_connection(httpd_req_t* req) {
 }
 
 static esp_err_t api_get_save_connection(httpd_req_t* req) {
-    // nvs_set_str(storage_handle, "wifi_ssid", "");
-    // nvs_set_str(storage_handle, "wifi_password", "");
+    esp_err_t err;
+
+    wifi_config_t wifi_config;
+    err = esp_wifi_get_config(WIFI_IF_STA, &wifi_config);
+    if (err != ESP_OK) {
+        ESP_LOGW(TAG, "Error getting wifi config. Error: %s", esp_err_to_name(err));
+        httpd_resp_send_500(req);
+        return err;
+    }
+
+    ESP_LOGI(TAG, "Current SSID: %s Password: %s", wifi_config.sta.ssid, wifi_config.sta.password);
+
+    err = nvs_set_str(storage_handle, "wifi_ssid", (char*)wifi_config.sta.ssid);
+    if (err != ESP_OK) {
+        ESP_LOGW(TAG, "Error saving wifi ssid. Error: %s", esp_err_to_name(err));
+        httpd_resp_send_500(req);
+        return err;
+    }
+
+    err = nvs_set_str(storage_handle, "wifi_password", (char*)wifi_config.sta.password);
+    if (err != ESP_OK) {
+        ESP_LOGW(TAG, "Error saving wifi password. Error: %s", esp_err_to_name(err));
+        httpd_resp_send_500(req);
+        return err;
+    }
 
     httpd_resp_send_err(req, HTTPD_501_METHOD_NOT_IMPLEMENTED, NULL);
     return ESP_OK;

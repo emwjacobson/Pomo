@@ -7,7 +7,7 @@
         <div class="config">
             <form onclick="return false">
                 <div class="flex v">
-                    <button class="button-submit" onclick="scan_ssids()" id="scan-button">Scan SSIDs</button>
+                    <button type="submit" class="button-submit" onclick="scan_ssids()" id="scan-button">Scan Access Points</button>
                 </div>
 
                 <div class="flex v">
@@ -17,11 +17,11 @@
 
                 <div class="flex v">
                     <label for="password">Password</label>
-                    <input type="password" name="Password" id="password">
+                    <input type="text" name="Password" id="password">
                 </div>
 
                 <div class="flex h">
-                    <button type="submit" class="button-submit" onclick="connect()">Connect</button>
+                    <button type="submit" class="button-submit" onclick="connect()" id="connect-button">Connect</button>
                     <button type="submit" class="button-submit" onclick="save_config()" id="check-button">Save Connection</button>
                 </div>
             </form>
@@ -34,11 +34,13 @@
 
             let button = document.getElementById('scan-button');
             button.innerHTML = "Scanning...";
+            button.disabled = true;
 
             http.open('GET', url);
             http.send();
             http.onreadystatechange = function() {
                 if (this.readyState == 4) {
+                    button.disabled = false;
                     if (http.status == 200) {
                         let data = JSON.parse(http.responseText);
                         console.log(data);
@@ -54,7 +56,7 @@
                             dropdown.add(option);
                         }
 
-                        button.innerHTML = "Scan SSIDs";
+                        button.innerHTML = "Scan Again";
                     } else {
                         button.innerHTML = "Error, please try again!";
                     }
@@ -66,8 +68,9 @@
             let ssid = document.getElementById('ssid');
             let password = document.getElementById('password');
 
-            console.log(ssid.value);
-            console.log(password.value);
+            let button = document.getElementById('connect-button');
+            button.innerHTML = "Connecting...";
+            button.disabled = true;
 
             let http = new XMLHttpRequest();
             let url = '/api/connect';
@@ -76,7 +79,15 @@
 
             http.onreadystatechange = function() {
                 if (this.readyState == 4) {
-                    console.log(http.status, http.responseText);
+                    let data = JSON.parse(http.responseText);
+                    console.log(data);
+
+                    if (data['status']) {
+                        button.innerHTML = "Successfully Connected!";
+                    } else {
+                        button.innerHTML = "Error connecting...";
+                    }
+                    button.disabled = false;
                 }
             }
         }
@@ -112,7 +123,7 @@
 
             http.onreadystatechange = function() {
                 if (this.readyState == 4) {
-                    console.log(this.data)
+                    console.log(this.data);
                 }
             }
         }

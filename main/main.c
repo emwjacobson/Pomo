@@ -34,6 +34,43 @@ esp_err_t init_fs() {
     return ESP_OK;
 }
 
+static void IRAM_ATTR gpio_button_handler(void* arg) {
+    ESP_DRAM_LOGI(TAG, "Called GPIO button handler");
+    wifi_reset_config();
+    return;
+} 
+
+esp_err_t init_gpio() {
+    esp_err_t err;
+    
+    gpio_config_t io_conf = {
+        .intr_type = GPIO_INTR_POSEDGE,
+        .mode = GPIO_MODE_INPUT,
+        .pin_bit_mask = (1ULL << 34),
+        .pull_down_en = true,
+        .pull_up_en = false
+    };
+    err = gpio_config(&io_conf);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "Error setting GPIO config. Error: %s", esp_err_to_name(err));
+        return err;
+    }
+
+    err = gpio_install_isr_service(0);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "Error initializing GPIO ISR service. Error: %s", esp_err_to_name(err));
+        return err;
+    }
+
+    err = gpio_isr_handler_add(GPIO_NUM_34, gpio_button_handler, NULL);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "Error adding ISR to GPIO");
+        return err;
+    }
+
+    return ESP_OK;
+}
+
 void app_main(void) {
     esp_err_t err;
 
@@ -42,8 +79,6 @@ void app_main(void) {
         ESP_LOGE(TAG, "Error initializing LEDs. Error: %s", esp_err_to_name(err));
         return;
     }
-
-    led_fade_in(COLOR_ORANGE);
 
     err = nvs_flash_init();
     if (err != ESP_OK) {
@@ -57,14 +92,23 @@ void app_main(void) {
         return;
     }
 
+    err = init_gpio();
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "Error initializing GPIO. Error: %s", esp_err_to_name(err));
+        return;
+    }
+
     err = wifi_init();
     if (err != ESP_OK) {
         ESP_LOGE(TAG, "Error initializing Wi-Fi. Error: %s", esp_err_to_name(err));
         return;
     }
 
+    led_fade_in(COLOR_ORANGE);
+
     if (wifi_is_configured()) {
         // If wifi is configured, it should have stored info to connect to an AP
+        led_fade_out();
 
         // TODO: Implement this
     } else {

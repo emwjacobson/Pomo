@@ -4,7 +4,7 @@
 #include <led_strip.h>
 
 #define LED_PIN GPIO_NUM_12
-#define NUM_LEDS 12
+#define NUM_LEDS 16
 #define LED_FADE_STEPS 20
 #define LED_DEFAULT_BRIGHTNESS 20
 
@@ -30,6 +30,7 @@ typedef enum {
     LED_DISPLAY_SOLID,
     LED_DISPLAY_SPIN,
     LED_DISPLAY_FADE_IN,
+    LED_DISPLAY_FADE_OUT,
 } led_display_type_t;
 
 typedef struct {
@@ -41,5 +42,8 @@ typedef struct {
 esp_err_t led_init(void);
 esp_err_t led_set_color(rgb_t color);
 esp_err_t led_fade_in(rgb_t color);
+esp_err_t led_fade_in_ISR(rgb_t color);
+esp_err_t led_fade_out(void);
+esp_err_t led_fade_out_ISR(void);
 
 #endif
