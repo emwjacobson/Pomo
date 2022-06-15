@@ -14,18 +14,26 @@
 #include <sdkconfig.h>
 #include <cJSON.h>
 
+#include <led_manager.h>
+#include <led_strip.h>
+
 #include <esp_http_client.h>
 #include "wifi_manager.h"
-
-#define PATH_MAX_LENGTH ESP_VFS_PATH_MAX+128
-#define SCRATCH_BUFSIZE (10240)
-#define DEFAULT_SCAN_LIST_SIZE 24
-#define PING_WAIT_DELAY_MS 250
 
 static const char *TAG = "Wifi Manager";
 static httpd_handle_t server = NULL;
 static esp_netif_t* cfg_netif_ap;
 static esp_netif_t* cfg_netif_sta;
+
+static void wifi_event_handler(void* arg, esp_event_base_t event_base,
+                                    int32_t event_id, void* event_data)
+{
+    if (event_id == WIFI_EVENT_STA_CONNECTED) {
+        wifi_event_ap_staconnected_t* event = (wifi_event_ap_staconnected_t*) event_data;
+        ESP_LOGI(TAG, "station " MACSTR " join, AID=%d", MAC2STR(event->mac), event->aid);
+        led_fade_in(COLOR_GREEN);
+    }
+}
 
 esp_err_t wifi_init(void) {
     esp_err_t err;
@@ -76,6 +84,12 @@ esp_err_t wifi_init(void) {
         ESP_LOGE(TAG, "Error running `esp_wifi_start`. Error: %s", esp_err_to_name(err));
         return err;
     }
+
+    esp_event_handler_instance_register(WIFI_EVENT,
+                                        ESP_EVENT_ANY_ID,
+                                        &wifi_event_handler,
+                                        NULL,
+                                        NULL);
 
     // server = NULL;
     httpd_config_t config = HTTPD_DEFAULT_CONFIG();
