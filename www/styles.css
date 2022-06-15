@@ -22,7 +22,7 @@ body {
     width: 30vw;
     background-color: #EEF0F2;
     border-radius: 5px;
-    padding: 20px;
+    padding: 10px;
     margin: 0px;
 }
 
@@ -30,6 +30,7 @@ body {
     display: flex;
     justify-content: center;
     align-items: center;
+    padding: 10px;
 }
 
 .v {
@@ -48,14 +49,15 @@ label {
 
 input[type=text], input[type=password], select {
     padding: 12px;
-    margin-bottom: 20px;
+    /* margin-bottom: 20px; */
     border: 1px solid lightgray;
     border-radius: 3px;
     width: 100%;
 }
 
 .button-submit {
-    width: 40%;
+    /* width: 40%; */
+    width: 100%;
     border: 1px solid #009FF5;
     padding: 20px;
     margin: 5px;

@@ -5,6 +5,8 @@
 #include <esp_err.h>
 #include <esp_system.h>
 #include <esp_netif.h>
+#include <nvs.h>
+#include <nvs_flash.h>
 #include <esp_log.h>
 #include <esp_ping.h>
 #include <ping/ping_sock.h>
@@ -14,18 +16,36 @@
 #include <sdkconfig.h>
 #include <cJSON.h>
 
+#include <led_manager.h>
+#include <led_strip.h>
+
 #include <esp_http_client.h>
 #include "wifi_manager.h"
 
-#define PATH_MAX_LENGTH ESP_VFS_PATH_MAX+128
-#define SCRATCH_BUFSIZE (10240)
-#define DEFAULT_SCAN_LIST_SIZE 24
-#define PING_WAIT_DELAY_MS 250
-
 static const char *TAG = "Wifi Manager";
 static httpd_handle_t server = NULL;
+static nvs_handle_t storage_handle;
 static esp_netif_t* cfg_netif_ap;
 static esp_netif_t* cfg_netif_sta;
+
+static bool connection_finished = false;
+static bool connection_success = false;
+
+static void wifi_event_handler(void* arg, esp_event_base_t event_base,
+                                    int32_t event_id, void* event_data) {
+    if (event_id == WIFI_EVENT_STA_CONNECTED) {
+        wifi_event_sta_connected_t* event = (wifi_event_sta_connected_t*)event_data;
+        ESP_LOGI(TAG, "Successfully connected to AP '%.*s'", event->ssid_len, event->ssid);
+        connection_finished = true;
+        connection_success = true;
+    } else if (event_id == WIFI_EVENT_STA_DISCONNECTED) {
+        wifi_event_sta_disconnected_t* event = (wifi_event_sta_disconnected_t*)event_data;
+        ESP_LOGI(TAG, "Disconnected from AP '%.*s' reason: %i", event->ssid_len, event->ssid, event->reason);
+        connection_finished = true;
+        connection_success = false;
+    }
+    ESP_LOGI(TAG, "Got event_base %c, event_id %i", *event_base, event_id);
+}
 
 esp_err_t wifi_init(void) {
     esp_err_t err;
@@ -77,10 +97,16 @@ esp_err_t wifi_init(void) {
         return err;
     }
 
+    esp_event_handler_instance_register(WIFI_EVENT,
+                                        ESP_EVENT_ANY_ID,
+                                        &wifi_event_handler,
+                                        NULL,
+                                        NULL);
+
     // server = NULL;
     httpd_config_t config = HTTPD_DEFAULT_CONFIG();
-    config.recv_wait_timeout = 10;
-    config.send_wait_timeout = 10;
+    config.recv_wait_timeout = 30;
+    config.send_wait_timeout = 30;
     config.uri_match_fn = httpd_uri_match_wildcard;
     // config.lru_purge_enable = true;
     
@@ -90,11 +116,36 @@ esp_err_t wifi_init(void) {
         return err;
     }
 
+    err = nvs_open("wifi_details", NVS_READWRITE, &storage_handle);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "Error running `nvs_open`. Error: %s", esp_err_to_name(err));
+        return err;
+    }
+
     return ESP_OK;
 }
 
 bool wifi_is_configured(void) {
-    return false;
+    esp_err_t err;
+
+    size_t size;
+    err = nvs_get_str(storage_handle, "wifi_ssid", NULL, &size);
+    if (err == ESP_ERR_NVS_NOT_FOUND) {
+        return false;
+    } else if (err != ESP_OK) {
+        ESP_LOGE(TAG, "Error running `nvs_get_str` for wifi_ssid. Error: %s", esp_err_to_name(err));
+        return err;
+    }
+
+    err = nvs_get_str(storage_handle, "wifi_password", NULL, &size);
+    if (err == ESP_ERR_NVS_NOT_FOUND) {
+        return false;
+    } else if (err != ESP_OK) {
+        ESP_LOGE(TAG, "Error running `nvs_get_str` for wifi_password. Error: %s", esp_err_to_name(err));
+        return err;
+    }
+
+    return true;
 }
 
 esp_err_t wifi_start_ap(void) {
@@ -268,6 +319,9 @@ static esp_err_t api_post_connect_to_ap(httpd_req_t* req) {
 
     cJSON_Delete(json);
 
+    connection_finished = false;
+    connection_success = false;
+
     esp_err_t err = wifi_connect_to_ap(ssid, password);
     if (err != ESP_OK) {
         ESP_LOGW(TAG, "Error connecting to wifi.");
@@ -275,7 +329,31 @@ static esp_err_t api_post_connect_to_ap(httpd_req_t* req) {
         return ESP_FAIL;
     }
 
-    httpd_resp_send(req, "OK", HTTPD_RESP_USE_STRLEN);
+    int i = 0;
+    while (!connection_finished) {
+        if (i > 2 * 8) {
+            ESP_LOGI(TAG, "Timed out waiting for connection status");
+            break;
+        }
+        ESP_LOGI(TAG, "Waiting for connection status...");
+        vTaskDelay(pdMS_TO_TICKS(1000));
+        i++;
+    }
+
+    if (connection_finished && connection_success) {
+        led_fade_in(COLOR_GREEN);
+    } else {
+        led_fade_in(COLOR_RED);
+    }
+
+    cJSON* ret_json = cJSON_CreateObject();
+
+    cJSON_AddItemToObject(ret_json, "status", cJSON_CreateBool(connection_finished && connection_success));
+    httpd_resp_set_type(req, "application/json");
+    httpd_resp_send(req, cJSON_PrintUnformatted(ret_json), HTTPD_RESP_USE_STRLEN);
+
+    cJSON_Delete(ret_json);
+    
     return ESP_OK;
 }
 
@@ -294,18 +372,18 @@ static void test_on_ping_end(esp_ping_handle_t hdl, void *args) {
     ping_finished = true;
     ping_successful = (received > 0);
 
-    // esp_ping_stop(hdl);
-    // if (err != ESP_OK) {
-    //     ESP_LOGE(TAG, "Error executing `esp_ping_stop`. Error: %s", esp_err_to_name(err));
-    //     httpd_resp_send_500(req);
-    //     return err;
-    // }
-    esp_ping_delete_session(hdl);
-    // if (err != ESP_OK) {
-    //     ESP_LOGE(TAG, "Error executing `esp_ping_delete_session`. Error: %s", esp_err_to_name(err));
-    //     httpd_resp_send_500(req);
-    //     return err;
-    // }
+    esp_err_t err;
+    err = esp_ping_stop(hdl);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "Error executing `esp_ping_stop`. Error: %s", esp_err_to_name(err));
+        return;
+    }
+
+    err = esp_ping_delete_session(hdl);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "Error executing `esp_ping_delete_session`. Error: %s", esp_err_to_name(err));
+        return;
+    }
 }
 
 static esp_err_t api_get_check_connection(httpd_req_t* req) {
@@ -380,6 +458,14 @@ static esp_err_t api_get_check_connection(httpd_req_t* req) {
     httpd_resp_send(req, cJSON_PrintUnformatted(resp_json), HTTPD_RESP_USE_STRLEN);
     cJSON_Delete(resp_json);
     ESP_LOGI(TAG, "Request handling finished");
+    return ESP_OK;
+}
+
+static esp_err_t api_get_save_connection(httpd_req_t* req) {
+    // nvs_set_str(storage_handle, "wifi_ssid", "");
+    // nvs_set_str(storage_handle, "wifi_password", "");
+
+    httpd_resp_send_err(req, HTTPD_501_METHOD_NOT_IMPLEMENTED, NULL);
     return ESP_OK;
 }
 
@@ -479,6 +565,13 @@ esp_err_t wifi_start_config_server(void) {
         .user_ctx = NULL
     };
 
+    static const httpd_uri_t api_save_connection_config = {
+        .uri = "/api/save_connection",
+        .method = HTTP_GET,
+        .handler = api_get_save_connection,
+        .user_ctx = NULL
+    };
+
     static const httpd_uri_t config_get_config = {
         .uri = "/*",
         .method = HTTP_GET,
@@ -489,6 +582,7 @@ esp_err_t wifi_start_config_server(void) {
     httpd_register_uri_handler(server, &api_get_ssids_config);
     httpd_register_uri_handler(server, &api_connect_config);
     httpd_register_uri_handler(server, &api_check_connection_config);
+    httpd_register_uri_handler(server, &api_save_connection_config);
     httpd_register_uri_handler(server, &config_get_config);
 
     return ESP_OK;
