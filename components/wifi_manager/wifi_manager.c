@@ -583,8 +583,31 @@ static esp_err_t api_get_save_connection(httpd_req_t* req) {
     return ESP_OK;
 }
 
+// From https://github.com/espressif/esp-idf/blob/master/examples/protocols/http_server/file_serving/main/file_server.c
+#define IS_FILE_EXT(filename, ext) (strcasecmp(&filename[strlen(filename) - sizeof(ext) + 1], ext) == 0)
+
+/* Set HTTP response content type according to file extension */
+static esp_err_t set_content_type_from_file(httpd_req_t *req, const char *filename)
+{
+    if (IS_FILE_EXT(filename, ".pdf")) {
+        return httpd_resp_set_type(req, "application/pdf");
+    } else if (IS_FILE_EXT(filename, ".html")) {
+        return httpd_resp_set_type(req, "text/html");
+    } else if (IS_FILE_EXT(filename, ".jpeg")) {
+        return httpd_resp_set_type(req, "image/jpeg");
+    } else if (IS_FILE_EXT(filename, ".ico")) {
+        return httpd_resp_set_type(req, "image/x-icon");
+    } else if (IS_FILE_EXT(filename, ".css")) {
+        return httpd_resp_set_type(req, "text/css");
+    }
+
+    /* This is a limited set only */
+    /* For any other type always set as plain text */
+    return httpd_resp_set_type(req, "text/plain");
+}
+
 esp_err_t send_page(httpd_req_t* req, int fd, char* filepath, int status) {
-    httpd_resp_set_type(req, "text/html");
+    set_content_type_from_file(req, filepath);
 
     char* chunk = calloc(1, SCRATCH_BUFSIZE);
     ssize_t read_bytes;
