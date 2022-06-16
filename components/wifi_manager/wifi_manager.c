@@ -85,7 +85,7 @@ esp_err_t wifi_init(void) {
         return err;
     }
 
-    err = esp_wifi_set_mode(WIFI_MODE_APSTA);
+    err = esp_wifi_set_mode(WIFI_MODE_STA);
     if (err != ESP_OK) {
         ESP_LOGE(TAG, "Error running `esp_wifi_set_mode`. Error: %s", esp_err_to_name(err));
         return err;
@@ -128,6 +128,8 @@ esp_err_t wifi_init(void) {
 bool wifi_is_configured(void) {
     esp_err_t err;
 
+    // We dont actually have to get the string from `nvs_get_str` as if it doesn't
+    // exist, then it will return ESP_ERR_NVS_NOT_FOUND
     size_t size;
     err = nvs_get_str(storage_handle, "wifi_ssid", NULL, &size);
     if (err == ESP_ERR_NVS_NOT_FOUND) {
@@ -191,6 +193,12 @@ esp_err_t wifi_start_ap(void) {
 
     esp_err_t err;
 
+    err = esp_wifi_set_mode(WIFI_MODE_APSTA);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "Error running `esp_wifi_set_mode`. Error: %s", esp_err_to_name(err));
+        return err;
+    }
+
     err = esp_wifi_set_config(WIFI_IF_AP, &wifi_config);
     if (err != ESP_OK) {
         ESP_LOGE(TAG, "Error running `esp_wifi_set_config`. Error: %s", esp_err_to_name(err));
@@ -231,6 +239,62 @@ esp_err_t wifi_connect_to_ap(const char ssid[32], const char password[32]) {
     }
 
     return ESP_OK;
+}
+
+esp_err_t wifi_connect_to_configured_ap(void) {
+    if (!wifi_is_configured()) {
+        ESP_LOGW(TAG, "Error trying to connect to configured wifi without being configured!");
+        return ESP_FAIL;
+    }
+
+    ESP_LOGI(TAG, "Getting wifi details from saved configuration.");
+
+    esp_err_t err;
+
+    char ssid[32];
+    char password[32];
+    size_t length;
+    err = nvs_get_str(storage_handle, "wifi_ssid", NULL, &length);
+    if (err != ESP_OK) {
+        ESP_LOGW(TAG, "Error executing `nvs_get_str` to get wifi_ssid length. Error: %s", esp_err_to_name(err));
+    }
+    err = nvs_get_str(storage_handle, "wifi_ssid", ssid, &length);
+    if (err != ESP_OK) {
+        ESP_LOGW(TAG, "Error executing `nvs_get_str` to get wifi_ssid. Error: %s", esp_err_to_name(err));
+    }
+
+    err = nvs_get_str(storage_handle, "wifi_password", NULL, &length);
+    if (err != ESP_OK) {
+        ESP_LOGW(TAG, "Error executing `nvs_get_str` to get wifi_password length. Error: %s", esp_err_to_name(err));
+    }
+    err = nvs_get_str(storage_handle, "wifi_password", password, &length);
+    if (err != ESP_OK) {
+        ESP_LOGW(TAG, "Error executing `nvs_get_str` to get wifi_password. Error: %s", esp_err_to_name(err));
+    }
+
+    ESP_LOGI(TAG, "Attempting to connect to AP");
+
+    connection_finished = false;
+    connection_success = false;
+
+    wifi_connect_to_ap(ssid, password);
+
+    int i = 0;
+    while (!connection_finished) {
+        if (i > 2 * 8) {
+            ESP_LOGI(TAG, "Timed out waiting for connection status");
+            break;
+        }
+        ESP_LOGI(TAG, "Waiting for connection status...");
+        vTaskDelay(pdMS_TO_TICKS(1000));
+        i++;
+    }
+
+    if (connection_finished && connection_success) {
+        return ESP_OK;
+    } else {
+        return ESP_FAIL;
+    }
 }
 
 static esp_err_t api_get_ssids_handler(httpd_req_t* req) {
@@ -514,7 +578,8 @@ static esp_err_t api_get_save_connection(httpd_req_t* req) {
         return err;
     }
 
-    httpd_resp_send_err(req, HTTPD_501_METHOD_NOT_IMPLEMENTED, NULL);
+    // httpd_resp_send_err(req, HTTPD_501_METHOD_NOT_IMPLEMENTED, NULL);
+    httpd_resp_send(req, "OK", HTTPD_RESP_USE_STRLEN);
     return ESP_OK;
 }
 
@@ -587,9 +652,9 @@ static esp_err_t config_get_handler(httpd_req_t* req) {
     return ESP_OK;
 }
 
-esp_err_t wifi_start_config_server(void) {
+esp_err_t wifi_start_http_server(void) {
     if (server == NULL) {
-        ESP_LOGW(TAG, "`wifi_start_config_server` called before HTTP server setup!");
+        ESP_LOGW(TAG, "`wifi_start_http_server` called before HTTP server setup!");
         return ESP_FAIL;
     }
 

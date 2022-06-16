@@ -104,27 +104,40 @@ void app_main(void) {
         return;
     }
 
-    led_fade_in(COLOR_ORANGE);
+    err = wifi_start_http_server();
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "Error starting config server. Error: %s", esp_err_to_name(err));
+        return;
+    }
 
     if (wifi_is_configured()) {
         // If wifi is configured, it should have stored info to connect to an AP
-        led_fade_out();
 
-        // TODO: Implement this
+        err = wifi_connect_to_configured_ap();
+        if (err != ESP_OK) {
+            led_fade_in(COLOR_RED);
+
+            err = wifi_start_ap();
+            if (err != ESP_OK) {
+                ESP_LOGE(TAG, "Error starting Wi-Fi access point. Error: %s", esp_err_to_name(err));
+                return;
+            }
+        } else {
+            led_fade_in(COLOR_GREEN);
+            led_fade_out();
+        }
+
+        // TODO:
+        // wifi_start_pomo_server()
     } else {
         // If wifi is not configured
+
+        led_fade_in(COLOR_ORANGE);
         
         // First start the config access point
         err = wifi_start_ap();
         if (err != ESP_OK) {
             ESP_LOGE(TAG, "Error starting Wi-Fi access point. Error: %s", esp_err_to_name(err));
-            return;
-        }
-
-        // Start the webserver for the config server
-        err = wifi_start_config_server();
-        if (err != ESP_OK) {
-            ESP_LOGE(TAG, "Error starting config server. Error: %s", esp_err_to_name(err));
             return;
         }
     }

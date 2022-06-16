@@ -5,8 +5,10 @@
 
 #define LED_PIN GPIO_NUM_12
 #define NUM_LEDS 16
+// Ideally the default brightness should be a multiple
+// of the fade steps to help create a smooth fade effect
+#define LED_DEFAULT_BRIGHTNESS 40
 #define LED_FADE_STEPS 20
-#define LED_DEFAULT_BRIGHTNESS 20
 
 static const rgb_t COLOR_ORANGE = {
     .r = 255,

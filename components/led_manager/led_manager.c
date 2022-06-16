@@ -45,7 +45,7 @@ static void led_task(void* args) {
                     ESP_LOGI(TAG, "Setting brightness to %i", strip.brightness);
                     led_strip_fill(&strip, 0, strip.length, led_item.color);
                     led_strip_flush(&strip);
-                    vTaskDelay(pdMS_TO_TICKS(50));
+                    vTaskDelay(pdMS_TO_TICKS(20));
                 }
                 ESP_LOGI(TAG, "Final setting value to %i", led_item.brightness);
                 strip.brightness = led_item.brightness;
@@ -59,7 +59,7 @@ static void led_task(void* args) {
                     ESP_LOGI(TAG, "Setting brightness to %i", strip.brightness);
                     led_strip_fill(&strip, 0, strip.length, last_color);
                     led_strip_flush(&strip);
-                    vTaskDelay(pdMS_TO_TICKS(50));
+                    vTaskDelay(pdMS_TO_TICKS(20));
                 }
                 ESP_LOGI(TAG, "Final setting value to %i", 0);
                 strip.brightness = 0;
