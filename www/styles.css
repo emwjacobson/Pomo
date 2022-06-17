@@ -185,3 +185,85 @@ button {
     background-color: red;
 }
 
+.main-margin {
+    margin-top: 50px;
+}
+
+@media (max-width: 600px) {
+    body {
+        flex-direction: column;
+        width: 100%;
+    }
+
+    .nav {
+        height: auto;
+        width: auto;
+        max-width: 100%;
+        min-width: 0;
+        box-shadow: none;
+    }
+
+    .w-1 {
+        padding: 10px;
+        width: 100%;
+    }
+    
+    .w-2 {
+        padding: 10px;
+        width: 100%;
+    }
+    
+    .w-3 {
+        padding: 10px;
+        width: 100%;
+    }
+    
+    .w-4 {
+        padding: 10px;
+        width: 100%;
+    }
+    
+    .w-5 {
+        padding: 10px;
+        width: 100%;
+    }
+    
+    .w-6 {
+        padding: 10px;
+        width: 100%;
+    }
+    
+    .w-7 {
+        padding: 10px;
+        width: 100%;
+    }
+    
+    .w-8 {
+        padding: 10px;
+        width: 100%;
+    }
+    
+    .w-9 {
+        padding: 10px;
+        width: 100%;
+    }
+    
+    .w-10 {
+        padding: 10px;
+        width: 100%;
+    }
+    
+    .w-11 {
+        padding: 10px;
+        width: 100%;
+    }
+    
+    .w-12 {
+        padding: 10px;
+        width: 100%;
+    }
+
+    .main-margin {
+        margin-top: 10px;
+    }
+}
