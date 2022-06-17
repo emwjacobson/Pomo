@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <title>Pomo</title>
+        <link rel="stylesheet" href="styles.css">
+    </head>
+    <body>
+
+        <div class="nav">
+            <div class="nav-item nav-header">
+                POMO
+            </div>
+
+            <a href="./index.html" class="nav-item nav-link">
+                Home
+            </a>
+
+            <a href="./config.html" class="nav-item nav-link active">
+                Config
+            </a>
+        </div>
+
+
+        <div class="main">
+            <div class="row"  style="margin-top: 100px;">
+                <div class="w-2"></div>
+
+                <div class="w-8 modal">
+                    <div class="row">
+                        <div class="w-6">
+                            <div class="form-item">
+                                <label for="ssid-name">SSID</label>
+                                <select name="ssid-name" id="ssid-name">
+                                    <option value="TEST">TEST</option>
+                                    <option value="TEST">TEST</option>
+                                    <option value="TEST">TEST</option>
+                                    <option value="TEST">TEST</option>
+                                    <option value="TEST">TEST</option>
+                                    <option value="TEST">TEST</option>
+                                    <option value="TEST">TEST</option>
+                                    <option value="TEST">TEST</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="w-6">
+                            <div class="form-item">
+                                <label for="ssid-password">Password</label>
+                                <input type="password" placeholder="Password">
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="w-4">
+                            <button>Scan SSID</button>
+                        </div>
+                        <div class="w-4">
+                            <button>Connect</button>
+                        </div>
+                        <div class="w-4">
+                            <button>Save Connection</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+
+        <script>
+            function scan_ssids() {
+                let http = new XMLHttpRequest();
+                let url = '/api/get_ssids';
+
+                let button = document.getElementById('scan-button');
+                button.innerHTML = "Scanning...";
+                button.disabled = true;
+
+                http.open('GET', url);
+                http.send();
+                http.onreadystatechange = function() {
+                    if (this.readyState == 4) {
+                        button.disabled = false;
+                        if (http.status == 200) {
+                            let data = JSON.parse(http.responseText);
+                            console.log(data);
+
+                            let dropdown = document.getElementById('ssid');
+                            dropdown.length = 0;
+
+                            let option;
+                            for (let i = 0; i < data['ssids'].length; i++) {
+                                option = document.createElement('option');
+                                option.text = data['ssids'][i];
+                                option.value = data['ssids'][i];
+                                dropdown.add(option);
+                            }
+
+                            button.innerHTML = "Scan Again";
+                        } else {
+                            button.innerHTML = "Error, please try again!";
+                        }
+                    }
+                }
+            }
+
+            function connect() {
+                let ssid = document.getElementById('ssid');
+                let password = document.getElementById('password');
+
+                let button = document.getElementById('connect-button');
+                button.innerHTML = "Connecting...";
+                button.disabled = true;
+
+                let http = new XMLHttpRequest();
+                let url = '/api/connect';
+                http.open("POST", url);
+                http.send(JSON.stringify({ssid: ssid.value, password: password.value}));
+
+                http.onreadystatechange = function() {
+                    if (this.readyState == 4) {
+                        let data = JSON.parse(http.responseText);
+                        console.log(data);
+
+                        if (data['status']) {
+                            button.innerHTML = "Successfully Connected!";
+                        } else {
+                            button.innerHTML = "Error connecting...";
+                        }
+                        button.disabled = false;
+                    }
+                }
+            }
+
+            // function check_connection() {
+            //     let button = document.getElementById('check-button');
+            //     button.innerHTML = "Checking...";
+
+            //     let http = new XMLHttpRequest();
+            //     let url = '/api/check_connection';
+            //     http.open("GET", url);
+            //     http.send();
+
+            //     http.onreadystatechange = function() {
+            //         if (this.readyState == 4) {
+            //             let data = JSON.parse(http.responseText);
+            //             console.log(data);
+
+            //             if (data['success']) {
+            //                 button.innerHTML = "Connection Success!";
+            //             } else {
+            //                 button.innerHTML = "Connection Failed.";
+            //             }
+            //         }
+            //     }
+            // }
+
+            function save_config() {
+                let http = new XMLHttpRequest();
+                let url = '/api/save_connection';
+                http.open("GET", url);
+                http.send();
+
+                http.onreadystatechange = function() {
+                    if (this.readyState == 4) {
+                        console.log(this.data);
+                    }
+                }
+            }
+        </script>
+
+    </body>
+</html>
