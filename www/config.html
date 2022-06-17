@@ -23,43 +23,47 @@
 
         <div class="main">
             <div class="row"  style="margin-top: 100px;">
-                <div class="w-2"></div>
+                <div class="w-3"></div>
 
-                <div class="w-8 modal">
+                <div class="w-6 modal">
                     <div class="row">
                         <div class="w-6">
                             <div class="form-item">
-                                <label for="ssid-name">SSID</label>
-                                <select name="ssid-name" id="ssid-name">
-                                    <option value="TEST">TEST</option>
-                                    <option value="TEST">TEST</option>
-                                    <option value="TEST">TEST</option>
-                                    <option value="TEST">TEST</option>
-                                    <option value="TEST">TEST</option>
-                                    <option value="TEST">TEST</option>
-                                    <option value="TEST">TEST</option>
-                                    <option value="TEST">TEST</option>
+                                <label for="ssid">SSID</label>
+                                <select name="ssid" id="ssid">
                                 </select>
                             </div>
                         </div>
 
                         <div class="w-6">
                             <div class="form-item">
-                                <label for="ssid-password">Password</label>
-                                <input type="password" placeholder="Password">
+                                <label for="password">Password</label>
+                                <input type="password" placeholder="Password" id="password">
                             </div>
                         </div>
                     </div>
 
                     <div class="row">
                         <div class="w-4">
-                            <button>Scan SSID</button>
+                            <button onclick="scan_ssids()" id="scan-button">Scan SSID</button>
                         </div>
                         <div class="w-4">
-                            <button>Connect</button>
+                            <button onclick="connect()" id="connect-button">Connect</button>
                         </div>
                         <div class="w-4">
-                            <button>Save Connection</button>
+                            <button onclick="save_config()" id="check-button">Save Connection</button>
+                        </div>
+                    </div>
+
+                    <hr>
+
+                    <div class="row">
+                        <div class="w-6">
+                            <button>Reboot Pomo</button>
+                        </div>
+
+                        <div class="w-6">
+                            <button>Reset Pomo</button>
                         </div>
                     </div>
                 </div>
@@ -123,7 +127,7 @@
                         console.log(data);
 
                         if (data['status']) {
-                            button.innerHTML = "Successfully Connected!";
+                            button.innerHTML = "Success!";
                         } else {
                             button.innerHTML = "Error connecting...";
                         }
