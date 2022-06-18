@@ -31,8 +31,7 @@ static esp_netif_t* cfg_netif_sta;
 static bool connection_finished = false;
 static bool connection_success = false;
 
-static void wifi_event_handler(void* arg, esp_event_base_t event_base,
-                                    int32_t event_id, void* event_data) {
+static void wifi_event_handler(void* arg, esp_event_base_t event_base, int32_t event_id, void* event_data) {
     if (event_id == WIFI_EVENT_STA_CONNECTED) {
         wifi_event_sta_connected_t* event = (wifi_event_sta_connected_t*)event_data;
         ESP_LOGI(TAG, "Successfully connected to AP '%.*s'", event->ssid_len, event->ssid);
@@ -150,7 +149,13 @@ bool wifi_is_configured(void) {
     return true;
 }
 
-void reset_config_runner(void* arg) {
+/**
+ * @brief Erases the stored wifi ssid and password. Should NOT be called from an ISR.
+ * Use `wifi_reset_config_ISR` if needed in an ISR.
+ * 
+ * @param arg arg is the result of also being a Task, should be set to NULL
+ */
+void wifi_reset_config(void* arg) {
     esp_err_t err;
     
     led_fade_in_ISR(COLOR_RED);
@@ -167,11 +172,16 @@ void reset_config_runner(void* arg) {
         return;
     }
 
-    vTaskDelete(NULL);
+    // Using a pointer as a bool
+    bool is_task = (bool)arg;
+
+    if (is_task) vTaskDelete(NULL);
 }
 
-esp_err_t wifi_reset_config(void) {
-    xTaskCreate(reset_config_runner, "Reset Runner", configMINIMAL_STACK_SIZE + 1024, NULL, tskIDLE_PRIORITY + 5, NULL);
+esp_err_t wifi_reset_config_ISR(void) {
+    // Resetting must be run as a new task as it is called from an ISR and should execute
+    // away from the ISR call.
+    xTaskCreate(wifi_reset_config, "Reset Runner", configMINIMAL_STACK_SIZE + 1024, (void*)true, tskIDLE_PRIORITY + 5, NULL);
 
     return ESP_OK;
 }
@@ -583,6 +593,32 @@ static esp_err_t api_get_save_connection(httpd_req_t* req) {
     return ESP_OK;
 }
 
+static esp_err_t api_get_reboot(httpd_req_t* req) {
+    httpd_resp_set_type(req, "text/html");
+    httpd_resp_send(req, "OK", HTTPD_RESP_USE_STRLEN);
+
+    led_fade_in(COLOR_ORANGE);
+    led_fade_out();
+
+    vTaskDelay(pdMS_TO_TICKS(500));
+
+    esp_restart();
+
+    // Theoretically should never even reach here...
+    return ESP_OK;
+}
+
+static esp_err_t api_get_reset(httpd_req_t* req) {
+    httpd_resp_send(req, "OK", HTTPD_RESP_USE_STRLEN);
+
+    vTaskDelay(pdMS_TO_TICKS(500));
+
+    wifi_reset_config(NULL);
+    esp_restart();
+
+    return ESP_OK;
+}
+
 // From https://github.com/espressif/esp-idf/blob/master/examples/protocols/http_server/file_serving/main/file_server.c
 #define IS_FILE_EXT(filename, ext) (strcasecmp(&filename[strlen(filename) - sizeof(ext) + 1], ext) == 0)
 
@@ -681,46 +717,62 @@ esp_err_t wifi_start_http_server(void) {
         return ESP_FAIL;
     }
 
-    static const httpd_uri_t api_get_ssids_config = {
+    static const httpd_uri_t api_get_ssids = {
         .uri = "/api/get_ssids",
         .method = HTTP_GET,
         .handler = api_get_ssids_handler,
         .user_ctx = NULL
     };
 
-    static const httpd_uri_t api_connect_config = {
+    static const httpd_uri_t api_connect = {
         .uri = "/api/connect",
         .method = HTTP_POST,
         .handler = api_post_connect_to_ap,
         .user_ctx = NULL
     };
 
-    static const httpd_uri_t api_check_connection_config = {
+    static const httpd_uri_t api_check_connection = {
         .uri = "/api/check_connection",
         .method = HTTP_GET,
         .handler = api_get_check_connection,
         .user_ctx = NULL
     };
 
-    static const httpd_uri_t api_save_connection_config = {
+    static const httpd_uri_t api_save_connection = {
         .uri = "/api/save_connection",
         .method = HTTP_GET,
         .handler = api_get_save_connection,
         .user_ctx = NULL
     };
 
-    static const httpd_uri_t config_get_config = {
+    static const httpd_uri_t api_reboot = {
+        .uri = "/api/reboot",
+        .method = HTTP_GET,
+        .handler = api_get_reboot,
+        .user_ctx = NULL
+    };
+
+    static const httpd_uri_t api_reset = {
+        .uri = "/api/reset",
+        .method = HTTP_GET,
+        .handler = api_get_reset,
+        .user_ctx = NULL
+    };
+
+    static const httpd_uri_t get_handler = {
         .uri = "/*",
         .method = HTTP_GET,
         .handler = config_get_handler,
         .user_ctx = NULL
     };
     
-    httpd_register_uri_handler(server, &api_get_ssids_config);
-    httpd_register_uri_handler(server, &api_connect_config);
-    httpd_register_uri_handler(server, &api_check_connection_config);
-    httpd_register_uri_handler(server, &api_save_connection_config);
-    httpd_register_uri_handler(server, &config_get_config);
+    httpd_register_uri_handler(server, &api_get_ssids);
+    httpd_register_uri_handler(server, &api_connect);
+    httpd_register_uri_handler(server, &api_check_connection);
+    httpd_register_uri_handler(server, &api_save_connection);
+    httpd_register_uri_handler(server, &api_reboot);
+    httpd_register_uri_handler(server, &api_reset);
+    httpd_register_uri_handler(server, &get_handler);
 
     return ESP_OK;
 }

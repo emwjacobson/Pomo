@@ -36,7 +36,7 @@ esp_err_t init_fs() {
 
 static void IRAM_ATTR gpio_button_handler(void* arg) {
     ESP_DRAM_LOGI(TAG, "Called GPIO button handler");
-    wifi_reset_config();
+    wifi_reset_config_ISR();
     return;
 } 
 

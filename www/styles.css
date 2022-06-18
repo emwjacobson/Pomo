@@ -189,6 +189,11 @@ button {
     margin-top: 50px;
 }
 
+.title {
+    font-size: 30px;
+    border-bottom: 2px solid rgb(83, 83, 83);
+}
+
 @media (max-width: 600px) {
     body {
         flex-direction: column;
