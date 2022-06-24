@@ -24,53 +24,94 @@ static led_strip_t strip = {
     .brightness = 20,
 };
 
+union display_data_t {
+    int brightness;
+};
+
 static void led_task(void* args) {
-    while(1) {
-        led_item_t led_item;
-        xQueueReceive(led_queue, &led_item, portMAX_DELAY);
+    led_item_t led_item;
+    int t = 0;
+    bool display_done = false;
 
-        uint8_t starting_brightness;
+    // Wait forever for first time to make sure we have something to display
+    xQueueReceive(led_queue, &led_item, portMAX_DELAY);
 
-        switch(led_item.type) {
+    while (1) {
+        // Transitions
+        // Only do transitions if a new item has been received
+        if (display_done && xQueueReceive(led_queue, &led_item, 0) == pdPASS) {
+            // If here, then there is a new lighting effect that should take place
+            ESP_LOGI(TAG, "Got new item from queue.");
+
+            // switch (led_item.type) {
+            //     case LED_DISPLAY_SOLID:
+            //         break;
+            //     case LED_DISPLAY_SPIN:
+            //         break;
+            //     case LED_DISPLAY_FADE_IN:
+            //         break;
+            //     case LED_DISPLAY_FADE_OUT:
+            //         break;
+            // }
+
+            t = 0;
+            // if (led_item.type != LED_DISPLAY_FADE_OUT)
+            //     last_color = led_item.color;
+
+            if (led_item.type == LED_DISPLAY_FADE_OUT) {
+                led_item.color = last_color;
+            } else {
+                last_color = led_item.color;
+            }
+            display_done = false;
+        }
+
+        // Actions
+        switch (led_item.type) {
             case LED_DISPLAY_SOLID:
                 strip.brightness = led_item.brightness;
                 led_strip_fill(&strip, 0, strip.length, led_item.color);
                 led_strip_flush(&strip);
+                display_done = true;
                 break;
             case LED_DISPLAY_SPIN:
+                display_done = true;
                 break;
             case LED_DISPLAY_FADE_IN:
-                for(int i = 0; i < LED_FADE_STEPS; i++) { // Fade in in 10 increments from 0 to set brightness
-                    strip.brightness = i * (led_item.brightness / LED_FADE_STEPS);
-                    ESP_LOGI(TAG, "Setting brightness to %i", strip.brightness);
+                if (strip.brightness != led_item.brightness) {
+                    if (strip.brightness > led_item.brightness) {
+                        ESP_LOGI(TAG, "Fade in complete");
+                        strip.brightness = led_item.brightness;
+                    } else if (strip.brightness < led_item.brightness) {
+                        strip.brightness += LED_BRIGHTNESS_STEP;
+                    }
+                    ESP_LOGI(TAG, "Fading in brightness to %i", strip.brightness);
                     led_strip_fill(&strip, 0, strip.length, led_item.color);
                     led_strip_flush(&strip);
-                    vTaskDelay(pdMS_TO_TICKS(20));
+                } else {
+                    display_done = true;
                 }
-                ESP_LOGI(TAG, "Final setting value to %i", led_item.brightness);
-                strip.brightness = led_item.brightness;
-                led_strip_fill(&strip, 0, strip.length, led_item.color);
-                led_strip_flush(&strip);
                 break;
             case LED_DISPLAY_FADE_OUT:
-                starting_brightness = strip.brightness;
-                for(int i = LED_FADE_STEPS; i > 0; i--) { // Fade in in 10 increments from 0 to set brightness
-                    strip.brightness = i * (starting_brightness / LED_FADE_STEPS);
-                    ESP_LOGI(TAG, "Setting brightness to %i", strip.brightness);
+                if (strip.brightness != led_item.brightness) {
+                    if (strip.brightness < led_item.brightness) {
+                        ESP_LOGI(TAG, "Fade out complete");
+                        strip.brightness = led_item.brightness;
+                    } else if (strip.brightness > led_item.brightness) {
+                        strip.brightness -= LED_BRIGHTNESS_STEP;
+                    }
+                    ESP_LOGI(TAG, "Fading out brightness to %i", strip.brightness);
                     led_strip_fill(&strip, 0, strip.length, last_color);
                     led_strip_flush(&strip);
-                    vTaskDelay(pdMS_TO_TICKS(20));
+                } else {
+                    display_done = true;
                 }
-                ESP_LOGI(TAG, "Final setting value to %i", 0);
-                strip.brightness = 0;
-                led_strip_fill(&strip, 0, strip.length, last_color);
-                led_strip_flush(&strip);
                 break;
         }
 
-        if (led_item.type != LED_DISPLAY_FADE_OUT) {
-            last_color = led_item.color;
-        }
+        t++;
+        // Run at roughly 10Hz
+        vTaskDelay(pdMS_TO_TICKS(50));
     }
 }
 
@@ -96,6 +137,18 @@ esp_err_t led_set_color(rgb_t color) {
         .brightness = LED_DEFAULT_BRIGHTNESS
     };
     
+    xQueueSend(led_queue, &led_item, portMAX_DELAY);
+
+    return ESP_OK;
+}
+
+esp_err_t led_set_off() {
+    led_item_t led_item = {
+        .type = LED_DISPLAY_SOLID,
+        .color = COLOR_OFF,
+        .brightness = 0
+    };
+
     xQueueSend(led_queue, &led_item, portMAX_DELAY);
 
     return ESP_OK;

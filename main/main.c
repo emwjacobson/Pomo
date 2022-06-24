@@ -79,6 +79,7 @@ void app_main(void) {
         ESP_LOGE(TAG, "Error initializing LEDs. Error: %s", esp_err_to_name(err));
         return;
     }
+    led_set_off();
 
     err = nvs_flash_init();
     if (err != ESP_OK) {
@@ -126,9 +127,6 @@ void app_main(void) {
             led_fade_in(COLOR_GREEN);
             led_fade_out();
         }
-
-        // TODO:
-        // wifi_start_pomo_server()
     } else {
         // If wifi is not configured
 
