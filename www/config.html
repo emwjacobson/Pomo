@@ -94,8 +94,8 @@
                             let option;
                             for (let i = 0; i < data['ssids'].length; i++) {
                                 option = document.createElement('option');
-                                option.text = data['ssids'][i];
-                                option.value = data['ssids'][i];
+                                option.text = data['ssids'][i]['ssid'] + (data['ssids'][i]['is_open'] ? " (OPEN)" : "");
+                                option.value = data['ssids'][i]['ssid'];
                                 dropdown.add(option);
                             }
 

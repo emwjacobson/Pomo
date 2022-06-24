@@ -104,6 +104,7 @@ esp_err_t wifi_init(void) {
 
     // server = NULL;
     httpd_config_t config = HTTPD_DEFAULT_CONFIG();
+    config.stack_size = 8192;
     config.recv_wait_timeout = 30;
     config.send_wait_timeout = 30;
     config.uri_match_fn = httpd_uri_match_wildcard;
@@ -342,7 +343,10 @@ static esp_err_t api_get_ssids_handler(httpd_req_t* req) {
     cJSON* ssid_arr = cJSON_AddArrayToObject(json, "ssids");
     for (int i = 0; (i < DEFAULT_SCAN_LIST_SIZE) && (i < ap_count); i++) {
         ESP_LOGI(TAG, "SSID \t\t%s", ap_info[i].ssid);
-        cJSON* ap = cJSON_CreateString((char*)(ap_info[i].ssid));
+
+        cJSON* ap = cJSON_CreateObject();
+        cJSON_AddItemToObject(ap, "ssid", cJSON_CreateString((char*)(ap_info[i].ssid)));
+        cJSON_AddItemToObject(ap, "is_open", cJSON_CreateBool(ap_info[i].authmode == WIFI_AUTH_OPEN));
         cJSON_AddItemToArray(ssid_arr, ap);
     }
 
