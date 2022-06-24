@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <string.h>
+#include <math.h>
 #include <esp_err.h>
 #include <esp_log.h>
 #include <led_strip.h>
@@ -77,6 +78,16 @@ static void led_task(void* args) {
             case LED_DISPLAY_SPIN:
                 display_done = true;
                 break;
+            case LED_DISPLAY_PULSE:
+                // brightness = (led_item.brightness / 4) * sin(t / 2pi) + led_item.brightness
+                strip.brightness = (int)((led_item.brightness / 2) * sinf(((float)t) / (2 * 3.14159)) + led_item.brightness);
+                ESP_LOGI(TAG, "Pulsing LED brightness to %i", strip.brightness);
+                led_strip_fill(&strip, 0, strip.length, led_item.color);
+                led_strip_flush(&strip);
+
+                // Set it as done after X * LED_TICKS_PER_SECOND seconds
+                display_done = (t >= 2 * LED_TICKS_PER_SECOND);
+                break;
             case LED_DISPLAY_FADE_IN:
                 if (strip.brightness != led_item.brightness) {
                     if (strip.brightness > led_item.brightness) {
@@ -111,7 +122,7 @@ static void led_task(void* args) {
 
         t++;
         // Run at roughly 10Hz
-        vTaskDelay(pdMS_TO_TICKS(50));
+        vTaskDelay(pdMS_TO_TICKS(LED_DELAY));
     }
 }
 
@@ -137,6 +148,18 @@ esp_err_t led_set_color(rgb_t color) {
         .brightness = LED_DEFAULT_BRIGHTNESS
     };
     
+    xQueueSend(led_queue, &led_item, portMAX_DELAY);
+
+    return ESP_OK;
+}
+
+esp_err_t led_set_pulse(rgb_t color) {
+    led_item_t led_item = {
+        .type = LED_DISPLAY_PULSE,
+        .color = color,
+        .brightness = LED_DEFAULT_BRIGHTNESS
+    };
+
     xQueueSend(led_queue, &led_item, portMAX_DELAY);
 
     return ESP_OK;

@@ -601,8 +601,7 @@ static esp_err_t api_get_reboot(httpd_req_t* req) {
     httpd_resp_set_type(req, "text/html");
     httpd_resp_send(req, "OK", HTTPD_RESP_USE_STRLEN);
 
-    led_fade_in(COLOR_ORANGE);
-    led_fade_out();
+    led_set_pulse(COLOR_ORANGE);
 
     vTaskDelay(pdMS_TO_TICKS(500));
 
