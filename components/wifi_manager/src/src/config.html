@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link href="styles.css" rel="stylesheet">
+    <title>Pomo - Config</title>
+</head>
+
+<body>
+    <div class="container relative flex min-w-full flex-col lg:flex-row">
+        <!-- Sidebar Section -->
+        <div class="container min-w-full bg-gray-200 lg:min-h-screen lg:min-w-0 lg:max-w-xs">
+            <div class="container flex min-w-full flex-col lg:min-w-0">
+                <div class="border-b-2 border-b-black p-3 text-center text-5xl font-semibold">POMO</div>
+                <a class="border-b-2 border-b-gray-500 p-5 text-xl transition-all hover:pl-8"
+                    href="./index.html">Home</a>
+                <a class="border-b-2 border-b-gray-500 p-5 text-xl transition-all hover:pl-8"
+                    href="./config.html">Config</a>
+            </div>
+        </div>
+
+        <!-- Main Content -->
+        <div class="container relative flex min-w-full flex-col items-center justify-center lg:min-w-0">
+            <div
+                class="container m-5 flex w-11/12 flex-wrap rounded-md border-2 border-gray-400 bg-gray-300 p-5 lg:m-2 lg:w-6/12">
+                <div class="w-full border-b-2 border-gray-500 p-2 text-3xl">Config</div>
+                <div class="flex w-6/12 flex-col p-2">
+                    <label for="ssid">SSID</label>
+                    <select name="ssid" id="ssid" class="box-border h-full rounded-md border-none p-2"></select>
+                </div>
+                <div class="w-6/12 p-2">
+                    <label for="password">Password</label>
+                    <input type="password" name="password" id="password"
+                        class="box-border w-full rounded-md border-black p-2" />
+                </div>
+                <div class="flex w-full flex-row border-b-2 border-gray-500 p-2">
+                    <button onclick="scan_ssids()" id="scan-button"
+                        class="mr-1 w-4/12 rounded-md border-none bg-gray-100 p-2 transition-all hover:bg-gray-200">Scan
+                        SSIDs</button>
+                    <button onclick="connect()" id="connect-button"
+                        class="ml-1 mr-1 w-4/12 rounded-md border-none bg-gray-100 p-2 transition-all hover:bg-gray-200">Connect</button>
+                    <button onclick="save_config()" id="check-button"
+                        class="ml-1 w-4/12 rounded-md border-none bg-gray-100 p-2 transition-all hover:bg-gray-200">Save
+                        Connection</button>
+                </div>
+                <div class="flex w-full flex-row p-2">
+                    <button onclick="reboot()"
+                        class="mr-1 w-6/12 rounded-md border-none bg-gray-100 p-2 transition-all hover:bg-gray-200">Reboot
+                        Pomo</button>
+                    <button onclick="reset()"
+                        class="ml-1 w-6/12 rounded-md border-none bg-gray-100 p-2 transition-all hover:bg-gray-200">Reset
+                        Pomo</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function scan_ssids() {
+            let http = new XMLHttpRequest();
+            let url = '/api/get_ssids';
+
+            let button = document.getElementById('scan-button');
+            button.innerHTML = "Scanning...";
+            button.disabled = true;
+
+            http.open('GET', url);
+            http.send();
+            http.onreadystatechange = function () {
+                if (this.readyState == 4) {
+                    button.disabled = false;
+                    if (http.status == 200) {
+                        let data = JSON.parse(http.responseText);
+
+                        let dropdown = document.getElementById('ssid');
+                        dropdown.length = 0;
+
+                        let option;
+                        for (let i = 0; i < data['ssids'].length; i++) {
+                            option = document.createElement('option');
+                            option.text = data['ssids'][i]['ssid'] + (data['ssids'][i]['is_open'] ? " (OPEN)" : "");
+                            option.value = data['ssids'][i]['ssid'];
+                            dropdown.add(option);
+                        }
+
+                        button.innerHTML = "Scan Again";
+                    } else {
+                        button.innerHTML = "Error, please try again!";
+                    }
+                }
+            }
+        }
+
+        function connect() {
+            let ssid = document.getElementById('ssid');
+            let password = document.getElementById('password');
+
+            let button = document.getElementById('connect-button');
+            button.innerHTML = "Connecting...";
+            button.disabled = true;
+
+            let http = new XMLHttpRequest();
+            let url = '/api/connect';
+            http.open("POST", url);
+            http.send(JSON.stringify({ ssid: ssid.value, password: password.value }));
+
+            http.onreadystatechange = function () {
+                if (this.readyState == 4) {
+                    let data = JSON.parse(http.responseText);
+
+                    if (data['status']) {
+                        button.innerHTML = "Success!";
+                    } else {
+                        button.innerHTML = "Error connecting...";
+                    }
+                    button.disabled = false;
+                }
+            }
+        }
+
+        function save_config() {
+            let http = new XMLHttpRequest();
+            let url = '/api/save_connection';
+            http.open("GET", url);
+            http.send();
+
+            http.onreadystatechange = function () {
+                if (this.readyState == 4) {
+                    alert('Wifi data has been saved!');
+                }
+            }
+        }
+
+        function reboot() {
+            if (confirm('Are you sure you want to reboot?')) {
+                let http = new XMLHttpRequest();
+                let url = '/api/reboot';
+                http.open("GET", url);
+                http.send();
+
+                http.onreadystatechange = function () {
+                    if (this.readyState == 4) {
+                        alert('Pomo should be rebooting shortly...');
+                    }
+                }
+            }
+        }
+
+        function reset() {
+            if (confirm('Are you sure you want to reset? This will erase all settings and stored tasks!')) {
+                let http = new XMLHttpRequest();
+                let url = '/api/reset';
+                http.open("GET", url);
+                http.send();
+
+                http.onreadystatechange = function () {
+                    if (this.readyState == 4) {
+                        alert('Pomo has been reset and is rebooting...');
+                    }
+                }
+            }
+        }
+    </script>
+</body>
+
+</html>
