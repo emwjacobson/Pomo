@@ -7,6 +7,7 @@
 #define SCRATCH_BUFSIZE (10240)
 #define DEFAULT_SCAN_LIST_SIZE 24
 #define PING_WAIT_DELAY_MS 250
+#define HOSTNAME "pomo"
 
 #ifndef MAC2STR
 #define MAC2STR(a) (a)[0], (a)[1], (a)[2], (a)[3], (a)[4], (a)[5]

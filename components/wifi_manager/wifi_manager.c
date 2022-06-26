@@ -67,7 +67,7 @@ esp_err_t wifi_init(void) {
         return err;
     }
 
-    err = mdns_hostname_set("pomo");
+    err = mdns_hostname_set(HOSTNAME);
     if (err != ESP_OK) {
         ESP_LOGE(TAG, "Error setting mdns hostname. Error %s", esp_err_to_name(err));
         return err;
@@ -75,6 +75,9 @@ esp_err_t wifi_init(void) {
 
     cfg_netif_ap = esp_netif_create_default_wifi_ap();
     cfg_netif_sta = esp_netif_create_default_wifi_sta();
+
+    esp_netif_set_hostname(cfg_netif_ap, HOSTNAME);
+    esp_netif_set_hostname(cfg_netif_sta, HOSTNAME);
 
     wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
 
