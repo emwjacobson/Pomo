@@ -44,16 +44,15 @@ static void led_task(void* args) {
             // If here, then there is a new lighting effect that should take place
             ESP_LOGI(TAG, "Got new item from queue.");
 
-            // switch (led_item.type) {
-            //     case LED_DISPLAY_SOLID:
-            //         break;
-            //     case LED_DISPLAY_SPIN:
-            //         break;
-            //     case LED_DISPLAY_FADE_IN:
-            //         break;
-            //     case LED_DISPLAY_FADE_OUT:
-            //         break;
-            // }
+            switch (led_item.type) {
+                case LED_DISPLAY_FADE_IN:
+                    strip.brightness = 0;
+                    led_strip_fill(&strip, 0, strip.length, led_item.color);
+                    led_strip_flush(&strip);
+                    break;
+                default:
+                    break;
+            }
 
             t = 0;
             // if (led_item.type != LED_DISPLAY_FADE_OUT)
