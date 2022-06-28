@@ -11,9 +11,9 @@
 #include <esp_spiffs.h>
 #include <led_strip.h>
 
-#include <led_manager.h>
-
+#include "led_manager.h"
 #include "wifi_manager.h"
+#include "task_manager.h"
 
 static const char *TAG = "Main";
 
@@ -104,6 +104,17 @@ void app_main(void) {
         ESP_LOGE(TAG, "Error initializing Wi-Fi. Error: %s", esp_err_to_name(err));
         return;
     }
+
+    err = task_init();
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "Error initializing Task Manager. Error: %s", esp_err_to_name(err));
+        return;
+    }
+
+    task_add(TASK_TYPE_REPEATING);
+    task_add(TASK_TYPE_REPEATING);
+    task_add(TASK_TYPE_REPEATING);
+    task_add(TASK_TYPE_REPEATING);
 
     err = wifi_start_http_server();
     if (err != ESP_OK) {
